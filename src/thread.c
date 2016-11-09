@@ -3,7 +3,7 @@ Copyright (C) 2011-2012, Parrot Foundation.
 
 =head1 NAME
 
-src/thread.c - Thread handling stuff
+src/thread.c - Native threads, posix or Win32
 
 =head1 DESCRIPTION
 
@@ -60,7 +60,7 @@ static int      num_threads = -1;
 =item C<PMC * Parrot_thread_create(PARROT_INTERP, INTVAL type, INTVAL
 clone_flags)>
 
-Create a new thread, cloning the current interpreter.
+Create a new thread (i.e. Task), cloning the current interpreter.
 
 The argument C<type> is currently ignored.
 
@@ -73,7 +73,7 @@ PMC *
 Parrot_thread_create(PARROT_INTERP, SHIM(INTVAL type), INTVAL clone_flags)
 {
     ASSERT_ARGS(Parrot_thread_create)
-    PMC    * const new_interp_pmc = clone_interpreter(interp, clone_flags);
+    PMC    * const new_interp_pmc = Parrot_interp_clone(interp, clone_flags);
     Interp * const new_interp     = (Interp *)VTABLE_get_pointer(interp, new_interp_pmc);
 
     /* Parrot_pmc_new sets parent_interpreter which would confuse the GC */
@@ -441,7 +441,7 @@ Parrot_clone_code(Parrot_Interp d, Parrot_Interp s)
     Parrot_block_GC_mark(d);
     Interp_flags_SET(d, PARROT_EXTERN_CODE_FLAG);
     d->code = NULL;
-    Parrot_switch_to_cs(d, s->code, 1);
+    Parrot_pf_switch_to_cs(d, s->code, 1);
     Parrot_unblock_GC_mark(d);
 }
 
@@ -674,7 +674,6 @@ It returns the actual number of num_threads, which might -1 be if
 numthreads is invalid, e.g. it exceeds the hard-coded constant
 MAX_THREADS (16), or if Parrot_set_num_threads() was called too late
 and threads were already initialized.
-
 
 =cut
 

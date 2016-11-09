@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -106,10 +106,10 @@ TBD
 #include "parrot/parrot.h"
 #include "parrot/gc_api.h"
 #include "parrot/pointer_array.h"
-#include "parrot/list.h"        /* only for MEMORY_DEBUG */
 #include "gc_private.h"
 #include "fixed_allocator.h"
 #ifdef MEMORY_DEBUG
+#  include "parrot/list.h"
 #  include "parrot/runcore_trace.h"
 #endif
 
@@ -121,12 +121,19 @@ TBD
 #endif
 
 /*
- * Maximum number of collections
- * NB:
- *  1. Maximum number is 8 due limit number of bits in PMC.flags.
- *  2. Don't forget to update gc_gms_select_generation_to_collect after changing it!
+ * Maximum number of generation buffers for gms.
+ * Max. 8 due to limited number of bits in PMC.flags, but practically 0-2 = 3
+ * Best performance with 2 and 3 in parrot-bench
  */
-#define MAX_GENERATIONS     4
+#ifndef GC_MAX_GENERATIONS
+#  define GC_MAX_GENERATIONS  3
+#endif
+#if GC_MAX_GENERATIONS > 8
+#  error GC_MAX_GENERATIONS > 8
+#endif
+#if GC_MAX_GENERATIONS < 1
+#  error GC_MAX_GENERATIONS < 1
+#endif
 
 /* We allocate additional space in front of PObj* to store additional pointer */
 typedef struct pmc_alloc_struct {
@@ -169,20 +176,14 @@ typedef struct MarkSweep_GC {
     /* During M&S gather new live objects in this list */
     struct Parrot_Pointer_Array     *dirty_list;
 
-    /*
-     * During checking of dirty_list it will be set to generation of youngest
-     * child
-     */
-    size_t    youngest_child;
-
     /* Currently allocate objects. */
-    struct Parrot_Pointer_Array     *objects[MAX_GENERATIONS];
+    struct Parrot_Pointer_Array     *objects[GC_MAX_GENERATIONS];
 
     /* Allocator for strings */
     struct Pool_Allocator           *string_allocator;
 
     /* MAX_GENERATIONS generations of strings */
-    struct Parrot_Pointer_Array     *strings[MAX_GENERATIONS];
+    struct Parrot_Pointer_Array     *strings[GC_MAX_GENERATIONS];
 
     /* Fixed-size allocator */
     struct Fixed_Allocator *fixed_size_allocator;
@@ -190,28 +191,31 @@ typedef struct MarkSweep_GC {
     /* String GC */
     struct String_GC        string_gc;
 
-    /* Amount of allocated memory before trigger gc */
-    size_t                  gc_threshold;
-
     /* During GC phase - which generation we are collecting */
     size_t                  gen_to_collect;
 
+    /* During checking of dirty_list it will be set to generation of youngest
+     * child  */
+    size_t    youngest_child;
+
+    /* Amount of allocated memory before trigger gc */
+    size_t                  gc_threshold;
+
     /* GC blocking */
-    UINTVAL gc_mark_block_level;  /* How many outstanding GC block
-                                     requests are there? */
-    UINTVAL gc_mark_block_level_locked;  /* How many outstanding GC block
-                                     requests are there from other threads? */
-    UINTVAL gc_sweep_block_level; /* How many outstanding GC block
-                                     requests are there? */
+    UINTVAL gc_mark_block_level:8;  /* Num of outstanding GC block requests */
+    UINTVAL gc_sweep_block_level:8; /* Num of outstanding GC block requests */
+    UINTVAL gc_mark_block_level_locked:8;  /* GC block requests from other threads? */
+    UINTVAL locked:8;               /* is the GC lock already taken? */
 
     UINTVAL num_early_gc_PMCs;    /* how many PMCs want immediate destruction */
 
-    UINTVAL locked;               /* is the GC lock already taken? */
 
 } MarkSweep_GC;
 
 /* Callback to destroy PMC or free string storage */
 typedef void (*sweep_cb)(PARROT_INTERP, PObj *obj);
+
+static void gc_gms_maybe_mark_and_sweep(PARROT_INTERP, UINTVAL flags);
 
 /* HEADERIZER HFILE: src/gc/gc_private.h */
 
@@ -681,6 +685,7 @@ Parrot_gc_gms_init(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
     /* We have to transfer ownership of memory to parent interp in threaded parrot */
     interp->gc_sys->finalize_gc_system = NULL; /* gc_gms_finalize; */
 
+    interp->gc_sys->maybe_gc_mark               = gc_gms_maybe_mark_and_sweep;
     interp->gc_sys->do_gc_mark                  = gc_gms_mark_and_sweep;
     interp->gc_sys->compact_string_pool         = gc_gms_compact_memory_pool;
 
@@ -695,8 +700,10 @@ Parrot_gc_gms_init(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
     interp->gc_sys->allocate_string_header      = gc_gms_allocate_string_header;
     interp->gc_sys->free_string_header          = gc_gms_free_string_header;
 
+#ifdef PARROT_BUFFERLIKE_LIST
     interp->gc_sys->allocate_bufferlike_header  = gc_gms_allocate_buffer_header;
     interp->gc_sys->free_bufferlike_header      = gc_gms_free_buffer_header;
+#endif
 
     interp->gc_sys->allocate_pmc_attributes     = gc_gms_allocate_pmc_attributes;
     interp->gc_sys->free_pmc_attributes         = gc_gms_free_pmc_attributes_locked;
@@ -715,6 +722,11 @@ Parrot_gc_gms_init(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
     interp->gc_sys->block_sweep                 = gc_gms_block_GC_sweep;
     interp->gc_sys->unblock_sweep               = gc_gms_unblock_GC_sweep;
     interp->gc_sys->is_blocked_sweep            = gc_gms_is_blocked_GC_sweep;
+
+    /* already zeroed
+    interp->gc_sys->block_move                  = NULL;
+    interp->gc_sys->unblock_move                = NULL;
+    interp->gc_sys->is_blocked_move             = NULL; */
 
     interp->gc_sys->allocate_string_storage     = gc_gms_allocate_string_storage;
     interp->gc_sys->reallocate_string_storage   = gc_gms_reallocate_string_storage;
@@ -748,24 +760,19 @@ Parrot_gc_gms_init(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
         size_t i;
 
         self = mem_internal_allocate_zeroed_typed(MarkSweep_GC);
-
         self->pmc_allocator = Parrot_gc_pool_new(interp,
             sizeof (pmc_alloc_struct));
-
         self->string_allocator = Parrot_gc_pool_new(interp,
             sizeof (string_alloc_struct));
-
         /* Allocate list for gray objects */
         self->work_list  = NULL;
         self->dirty_list = Parrot_pa_new(interp);
-
-        for (i = 0; i < MAX_GENERATIONS; i++) {
+        for (i = 0; i < GC_MAX_GENERATIONS; i++) { /* 0,1,2*/
             self->objects[i] = Parrot_pa_new(interp);
             self->strings[i] = Parrot_pa_new(interp);
         }
 
         self->fixed_size_allocator = Parrot_gc_fixed_allocator_new(interp);
-
         /*
          * Collect every nursery_size/100 of system memory.
          *
@@ -794,9 +801,6 @@ gc_gms_mark_and_sweep(PARROT_INTERP, UINTVAL flags)
     MarkSweep_GC * const self = (MarkSweep_GC *)interp->gc_sys->gc_private;
     int gen = -1;
 
-    if (interp->thread_data)
-        LOCK(interp->thread_data->interp_lock);
-
     /* GC is blocked */
     if (self->gc_mark_block_level || self->gc_mark_block_level_locked)
         goto DONE;
@@ -809,6 +813,8 @@ gc_gms_mark_and_sweep(PARROT_INTERP, UINTVAL flags)
     if (flags & GC_strings_cb_FLAG)
         goto DONE;
 
+    if (interp->thread_data)
+        LOCK(interp->thread_data->interp_lock);
     /* Block further GC calls */
     ++self->gc_mark_block_level;
     self->work_list = Parrot_pa_new(interp);
@@ -928,24 +934,38 @@ gc_gms_select_generation_to_collect(PARROT_INTERP)
     /* TODO Use less naive approach. E.g. count amount of allocated memory in
      * older generations */
     size_t runs = interp->gc_sys->stats.gc_mark_runs;
-/*
+#if GC_MAX_GENERATIONS > 8
     if (runs % 100000000 == 0)
         return 8;
+#  if GC_MAX_GENERATIONS > 7
     if (runs % 10000000 == 0)
         return 7;
+#    if GC_MAX_GENERATIONS > 6
     if (runs % 1000000 == 0)
         return 6;
+#      if GC_MAX_GENERATIONS > 5
     if (runs % 100000 == 0)
         return 5;
+#        if GC_MAX_GENERATIONS > 4
     if (runs % 10000 == 0)
         return 4;
-*/
+#          if GC_MAX_GENERATIONS > 3
     if (runs % 1000 == 0)
         return 3;
+#            if GC_MAX_GENERATIONS > 2
     if (runs % 100 == 0)
         return 2;
+#              if GC_MAX_GENERATIONS > 1
     if (runs % 10 == 0)
         return 1;
+#              endif
+#            endif
+#          endif
+#        endif
+#      endif
+#    endif
+#  endif
+#endif
     return 0;
 }
 
@@ -993,13 +1013,14 @@ gc_gms_cleanup_dirty_list(PARROT_INTERP,
             PObj_GC_on_dirty_list_CLEAR(pmc);
             Parrot_pa_remove(interp, dirty_list, item->ptr);
             item->ptr = Parrot_pa_insert(self->objects[gen], item);
-            gc_gms_seal_object(interp, pmc);
+            /* inlined gc_gms_seal_object(interp, pmc); */
+            PObj_GC_need_write_barrier_SET(pmc);
         }
         else {
             /* Survival */
             /* This check used to be
-             * if ((gen <= self->gen_to_collect) && (gen < MAX_GENERATIONS - 1))
-             * Unfortunatelly it's wrong.
+             * if ((gen <= self->gen_to_collect) && (gen < GC_MAX_GENERATIONS))
+             * Unfortunately it's wrong.
              * Consider this:
              * A1* -> B1* -> C0. (Object in generation notation. Star denotes "dirt
              * During gen0 collecting will "sink" A object, but not B. This picture
@@ -1009,7 +1030,7 @@ gc_gms_cleanup_dirty_list(PARROT_INTERP,
              * And after collecting of gen2 we'll collect B and C incorrectly.
              * Because A(3) will be in older generation than B and C.
              */
-            if (gen < MAX_GENERATIONS - 1) {
+            if (gen < GC_MAX_GENERATIONS) {
                 SET_GEN_FLAGS(pmc, gen + 1);
             }
         };);
@@ -1111,7 +1132,7 @@ gc_gms_sweep_pools(PARROT_INTERP, ARGMOD(MarkSweep_GC *self))
 
     for (i = self->gen_to_collect; i >= 0; i--) {
         /* Don't move to generation beyond last */
-        const int move_to_old = (i + 1) != MAX_GENERATIONS;
+        const int move_to_old = i != GC_MAX_GENERATIONS;
 
         POINTER_ARRAY_ITER(self->objects[i],
             pmc_alloc_struct * const item = (pmc_alloc_struct *)ptr;
@@ -1213,9 +1234,12 @@ gc_gms_mark_pmc_header(PARROT_INTERP, ARGMOD(PMC *pmc))
     pmc_alloc_struct  * const item = PMC2PAC(pmc);
     const size_t gen  = POBJ2GEN(pmc);
 
+#ifdef MEMORY_DEBUG
+    if (PObj_on_free_list_TEST(pmc))
+        GC_DEBUG_DETAIL_FLAGS("GC mark free pmc ", pmc); /* GH #1159 */
+#endif
     PARROT_ASSERT(!PObj_on_free_list_TEST(pmc)
         || !"Resurrecting of dead objects is not supported");
-
     PARROT_GC_ASSERT_INTERP(pmc, interp);
 
     /* Object was already marked as grey. Or live. Or dead. Skip it */
@@ -1427,28 +1451,32 @@ gc_gms_get_gc_info(PARROT_INTERP, Interpinfo_enum which)
     ASSERT_ARGS(gc_gms_get_gc_info)
     MarkSweep_GC * const self = (MarkSweep_GC *)interp->gc_sys->gc_private;
 
-    if (which == IMPATIENT_PMCS)
+    switch (which) {
+      case MAX_GENERATIONS:
+        return GC_MAX_GENERATIONS;
+      case IMPATIENT_PMCS:
         return self->num_early_gc_PMCs;
-    if (which == TOTAL_PMCS) {
+      case TOTAL_PMCS: {
         /* It's higher than actual number of allocated PMCs */
         size_t ret = 0;
         size_t i;
-        for (i = 0; i < MAX_GENERATIONS; i++) {
+        for (i = 0; i < GC_MAX_GENERATIONS; i++) {
             ret += Parrot_pa_count_allocated(interp, self->objects[i]);
         }
         return ret;
-    }
-    if (which == ACTIVE_PMCS) {
+      }
+      case ACTIVE_PMCS: {
         /* It's higher than actual number of allocated PMCs */
         size_t ret = 0;
         size_t i;
-        for (i = 0; i < MAX_GENERATIONS; i++) {
+        for (i = 0; i < GC_MAX_GENERATIONS; i++) {
             ret += Parrot_pa_count_used(interp, self->objects[i]);
         }
         return ret;
+      }
+      default:
+        return Parrot_gc_get_info(interp, which, &interp->gc_sys->stats);
     }
-
-    return Parrot_gc_get_info(interp, which, &interp->gc_sys->stats);
 }
 
 
@@ -1471,7 +1499,7 @@ gc_gms_finalize(PARROT_INTERP)
 
     Parrot_gc_str_finalize(interp, &self->string_gc);
 
-    for (i = 0; i < MAX_GENERATIONS; i++) {
+    for (i = 0; i < GC_MAX_GENERATIONS; i++) {
         Parrot_pa_destroy(interp, self->objects[i]);
         Parrot_pa_destroy(interp, self->strings[i]);
     }
@@ -1483,7 +1511,7 @@ gc_gms_finalize(PARROT_INTERP)
 
 /*
 
-=item C<gc_gms_maybe_mark_and_sweep(PARROT_INTERP)>
+=item C<gc_gms_maybe_mark_and_sweep(PARROT_INTERP, UINTVAL flags)>
 
 Maybe M&S. Depends on total allocated memory, memory allocated since last alloc.
 
@@ -1491,15 +1519,15 @@ Maybe M&S. Depends on total allocated memory, memory allocated since last alloc.
 
 */
 
-#define gc_gms_maybe_mark_and_sweep(i) \
-    do { \
-        MarkSweep_GC * const _self = (MarkSweep_GC *)(i)->gc_sys->gc_private; \
-    \
-        /* Collect every gc_threshold. */ \
-        if (!_self->gc_mark_block_level \
-        &&  (i)->gc_sys->stats.mem_used_last_collect > _self->gc_threshold) \
-            gc_gms_mark_and_sweep(interp, 0); \
-    } while (0)
+static void
+gc_gms_maybe_mark_and_sweep(PARROT_INTERP, UINTVAL flags) {
+    MarkSweep_GC * const self = (MarkSweep_GC *)(interp)->gc_sys->gc_private;
+
+    /* Collect every gc_threshold. */
+    if (!self->gc_mark_block_level
+    && interp->gc_sys->stats.mem_used_last_collect > self->gc_threshold)
+        gc_gms_mark_and_sweep(interp, flags);
+}
 
 PARROT_MALLOC
 PARROT_CAN_RETURN_NULL
@@ -1511,7 +1539,7 @@ gc_gms_allocate_pmc_header(PARROT_INTERP, SHIM(UINTVAL flags))
     Pool_Allocator   * const pool = self->pmc_allocator;
     pmc_alloc_struct * item = NULL;
 
-    gc_gms_maybe_mark_and_sweep(interp);
+    gc_gms_maybe_mark_and_sweep(interp, 0);
 
     if (interp->thread_data)
         LOCK(interp->thread_data->interp_lock);
@@ -1624,15 +1652,21 @@ gc_gms_is_pmc_ptr(PARROT_INTERP, ARGIN_NULLOK(void *ptr))
 
 =item C<gc_gms_allocate_string_header(PARROT_INTERP, STRING *str)>
 
+Allocate a string header.
+
 =item C<gc_gms_free_string_header(PARROT_INTERP, STRING *s)>
+
+Free a string header.
 
 =item C<static Parrot_Buffer* gc_gms_allocate_buffer_header(PARROT_INTERP,
 size_t size)>
 
+Deprecated. define PARROT_BUFFERLIKE_LIST in config.h to use it.
+
 =item C<static void gc_gms_free_buffer_header(PARROT_INTERP, Parrot_Buffer *s,
 size_t size)>
 
-Allocate/free string/buffer headers.
+Deprecated. define PARROT_BUFFERLIKE_LIST in config.h to use it.
 
 */
 
@@ -1647,7 +1681,7 @@ gc_gms_allocate_string_header(PARROT_INTERP, SHIM(UINTVAL flags))
     string_alloc_struct *item;
     STRING              *ret;
 
-    gc_gms_maybe_mark_and_sweep(interp);
+    gc_gms_maybe_mark_and_sweep(interp, 0);
 
     if (interp->thread_data)
         LOCK(interp->thread_data->interp_lock);
@@ -1694,6 +1728,8 @@ gc_gms_free_string_header(PARROT_INTERP, ARGFREE(STRING *s))
     }
 }
 
+#ifdef PARROT_BUFFERLIKE_LIST
+
 PARROT_MALLOC
 PARROT_CAN_RETURN_NULL
 static Parrot_Buffer*
@@ -1709,6 +1745,8 @@ gc_gms_free_buffer_header(PARROT_INTERP, ARGFREE(Parrot_Buffer *s), SHIM(size_t 
     ASSERT_ARGS(gc_gms_free_buffer_header)
     gc_gms_free_string_header(interp, (STRING*)s);
 }
+
+#endif
 
 /*
 
@@ -1829,7 +1867,7 @@ gc_gms_iterate_live_strings(PARROT_INTERP,
 
     MarkSweep_GC * const self = (MarkSweep_GC *)interp->gc_sys->gc_private;
     size_t i;
-    for (i = 0; i < MAX_GENERATIONS; i++) {
+    for (i = 0; i < GC_MAX_GENERATIONS; i++) {
         POINTER_ARRAY_ITER(self->strings[i],
             STRING *s = &((string_alloc_struct *)ptr)->str;
             callback(interp, (Parrot_Buffer *)s, data););
@@ -1978,6 +2016,7 @@ gc_gms_allocate_memory_chunk(PARROT_INTERP, size_t size)
 {
     ASSERT_ARGS(gc_gms_allocate_memory_chunk)
     void * const ptr = malloc(size);
+    MEMORY_DEBUG_UNUSED(interp)
     MEMORY_DEBUG_DETAIL_2("Allocated "SIZE_FMT" at %p\n", size, ptr);
     if (!ptr && size)
         PANIC_OUT_OF_MEM(size);
@@ -1991,6 +2030,7 @@ gc_gms_reallocate_memory_chunk(PARROT_INTERP, ARGFREE(void *from), size_t size)
 {
     ASSERT_ARGS(gc_gms_reallocate_memory_chunk)
     void *ptr;
+    MEMORY_DEBUG_UNUSED(interp)
     MEMORY_DEBUG_DETAIL_2("Freed %p (realloc -- "SIZE_FMT" bytes)\n", from, size);
     if (from)
         ptr = realloc(from, size);
@@ -2009,6 +2049,7 @@ gc_gms_allocate_memory_chunk_zeroed(PARROT_INTERP, size_t size)
 {
     ASSERT_ARGS(gc_gms_allocate_memory_chunk_zeroed)
     void * const ptr = calloc(1, size);
+    MEMORY_DEBUG_UNUSED(interp)
     MEMORY_DEBUG_DETAIL_2("Allocated "SIZE_FMT" at %p\n", size, ptr);
     if (!ptr && size)
         PANIC_OUT_OF_MEM(size);
@@ -2032,6 +2073,7 @@ static void
 gc_gms_free_memory_chunk(PARROT_INTERP, ARGFREE(void *data))
 {
     ASSERT_ARGS(gc_gms_free_memory_chunk)
+    MEMORY_DEBUG_UNUSED(interp)
     MEMORY_DEBUG_DETAIL_2("Freed %p%s\n", data, "");
     if (data)
         free(data);
@@ -2281,24 +2323,22 @@ gc_gms_check_sanity(PARROT_INTERP)
     MarkSweep_GC * const self = (MarkSweep_GC *)interp->gc_sys->gc_private;
     size_t i;
 
-    for (i = 0; i < MAX_GENERATIONS; i++) {
+    for (i = 0; i < GC_MAX_GENERATIONS; i++) {
         POINTER_ARRAY_ITER(self->objects[i],
             PMC *pmc = &(((pmc_alloc_struct*)ptr)->pmc);
             const size_t gen  = POBJ2GEN(pmc);
             PARROT_GC_ASSERT_INTERP(pmc, interp);
-            if (i < 3) { /* too many objects in gen3 */
-                GC_DEBUG_DETAIL_1_FLAGS("GC live gen %ld ", gen, pmc);
+            if (i < 3) { /* do not display older generations, too many */
+                GC_DEBUG_DETAIL_1_FLAGS("GC live gen "SIZE_FMT" ", gen, pmc);
             }
             if (gen != i) {
-                fprintf(stderr, "GC live gen %ld != %ld ", gen, i);
+                fprintf(stderr, "GC live gen "SIZE_FMT" != "SIZE_FMT" ", gen, i);
                 trace_pmc_dump(interp, pmc);
                 fprintf(stderr, "\n");
             }
-            /*PARROT_ASSERT((gen == i) || !PObj_GC_on_dirty_list_TEST(pmc)
-                             || !"Dirty live object from wrong generation");*/
-            PARROT_ASSERT((gen == i) || (pmc->vtable->base_type == enum_class_Coroutine)
-              || !"Object from wrong generation");
-
+            PARROT_ASSERT((gen == i) || !PObj_GC_on_dirty_list_TEST(pmc)
+                          || !"Dirty live object from wrong generation");
+            PARROT_ASSERT((gen == i) || !"Object from wrong generation");
             if (i)
                 PARROT_ASSERT(PObj_GC_need_write_barrier_TEST(pmc)
                     || !"Unsealed object in old generation"););
@@ -2348,19 +2388,19 @@ gc_gms_print_stats_always(PARROT_INTERP, ARGIN(const char* header))
     MarkSweep_GC * const self = (MarkSweep_GC *)interp->gc_sys->gc_private;
     size_t            i;
 
-    fprintf(stderr, "GC %-25s | total: %lu, gen: %lu, ", header,
-            (unsigned long)interp->gc_sys->stats.gc_mark_runs,
-            (unsigned long)self->gen_to_collect);
+    fprintf(stderr, "GC %-25s | total: "SIZE_FMT", gen: "SIZE_FMT", ", header,
+            interp->gc_sys->stats.gc_mark_runs,
+            self->gen_to_collect);
 
-    fprintf(stderr, "dirty: %lu, work: %lu\n",
-            (unsigned long)Parrot_pa_count_used(interp, self->dirty_list),
+    fprintf(stderr, "dirty: "SIZE_FMT", work: "SIZE_FMT"\n",
+            Parrot_pa_count_used(interp, self->dirty_list),
             self->work_list
-              ? (unsigned long)Parrot_pa_count_used(interp, self->work_list)
+              ? Parrot_pa_count_used(interp, self->work_list)
               : 0);
 
-    for (i = 0; i < MAX_GENERATIONS; i++)
-        fprintf(stderr, "GEN %lu: %6lu objects, %6lu strings\n",
-                (unsigned long)i,
+    for (i = 0; i < GC_MAX_GENERATIONS; i++)
+        fprintf(stderr, "GEN "SIZE_FMT": %6lu objects, %6lu strings\n",
+                i,
                 (unsigned long)Parrot_pa_count_used(interp, self->objects[i]),
                 (unsigned long)Parrot_pa_count_used(interp, self->strings[i]));
 
@@ -2376,9 +2416,11 @@ gc_gms_print_stats_always(PARROT_INTERP, ARGIN(const char* header))
     fprintf(stderr, ", attrs: %6lu",
             (unsigned long)Parrot_gc_fixed_allocator_allocated_memory(interp,
               self->fixed_size_allocator));
-    fprintf(stderr, ", parent: 0x%lx, tid: %3d",
-            (unsigned long)interp->parent_interpreter,
-            interp->thread_data ? (signed)interp->thread_data->tid : -1);
+    if (interp->parent_interpreter) {
+        fprintf(stderr, ", parent: 0x%lx, tid: %3d",
+                (unsigned long)interp->parent_interpreter,
+                interp->thread_data ? (signed)interp->thread_data->tid : -1);
+    }
 #endif
     fprintf(stderr, "\n");
 
@@ -2465,7 +2507,7 @@ gc_gms_validate_objects(PARROT_INTERP)
 #  ifdef MEMORY_DEBUG
     fprintf(stderr, "GMS Clear Generations\n");
 #  endif
-    for (i = 0; i < MAX_GENERATIONS; i++) {
+    for (i = 0; i < GC_MAX_GENERATIONS; i++) {
         POINTER_ARRAY_ITER(self->objects[i],
             PMC * const pmc = &((pmc_alloc_struct *)ptr)->pmc;
             PARROT_GC_ASSERT_INTERP(pmc, interp);

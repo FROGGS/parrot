@@ -208,10 +208,11 @@ int /*@alt void@*/
 imcc_vfprintf(
     ARGMOD(imc_info_t * imcc),
     ARGMOD(PMC *io),
-    ARGIN(const char *format),
+    ARGIN_FORMAT(const char *format),
     va_list ap)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
+        __attribute__format__(3, 0)
         __attribute__nonnull__(3)
         FUNC_MODIFIES(* imcc)
         FUNC_MODIFIES(*io);
@@ -392,7 +393,6 @@ void IMCC_push_parser_state(imc_info_t *info, STRING *filename, int is_file,
         int is_pasm);
 void IMCC_pop_parser_state(imc_info_t *info, void *yyscanner);
 
-/* globals store the state between individual e_pbc_emit calls */
 typedef struct subs_t {
     IMC_Unit      *unit;
     struct subs_t *prev;
@@ -416,6 +416,7 @@ typedef struct code_segment_t {
     SymHash                key_consts;    /* this seg's cached key constants */
 } code_segment_t;
 
+/* globals store the state between individual e_pbc_emit calls */
 typedef struct _imcc_globals_t {
     code_segment_t *cs;           /* current code segment */
     code_segment_t *first;        /* first code segment   */

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2008-2014, Parrot Foundation.
+Copyright (C) 2008-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -47,7 +47,7 @@ pmclass FileHandle extends Handle auto_attrs {
 
 /*
  * Using INTVAL for process_id is a temporary solution.
- * We may need to define a custom type to store it in a platform dependant way.
+ * We may need to define a custom type to store it in a platform dependent way.
  */
 
 /*
@@ -156,15 +156,13 @@ Mark active filehandle data as live.
 
 =item C<void destroy()>
 
-Free structures.
+Flushes the buffer and handle and closes the handle.
 
 =cut
 
 */
     VTABLE void destroy() :no_wb {
         Parrot_io_close(INTERP, SELF, 1);
-
-        /* TODO: flush and free the buffers */
     }
 
 
@@ -179,7 +177,7 @@ For internal usage only, subject to change without notice.
 
 */
 
-    VTABLE INTVAL get_integer_keyed_int(INTVAL key) :no_wb {
+    VTABLE INTVAL get_integer_keyed_int(const INTVAL key) :no_wb {
         INTVAL result;
         switch (key) {
           case 0:
@@ -285,7 +283,7 @@ EXCEPTION_INVALID_OPERATION with:
         PMC    *filehandle;
 
         if (!Parrot_io_is_closed(INTERP, SELF))
-            Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_PIO_ERROR,
+            Parrot_ex_throw_from_c_noargs(INTERP, EXCEPTION_PIO_ERROR,
                                 "Cannot reopen already open FileHandle");
 
         if (!got_mode || STRING_IS_NULL(mode))
@@ -439,7 +437,7 @@ To ensure readall semantics C<seek> to position 0 first.
             GET_ATTR_encoding(INTERP, SELF, encoding);
 
             if (!Parrot_io_is_closed(INTERP, SELF))
-                Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_PIO_ERROR,
+                Parrot_ex_throw_from_c_noargs(INTERP, EXCEPTION_PIO_ERROR,
                     "Cannot readall on a new file from an already open filehandle");
 
             filehandle = Parrot_io_open(INTERP, PMCNULL, name, STRINGNULL);

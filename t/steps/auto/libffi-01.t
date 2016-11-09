@@ -1,10 +1,10 @@
 #!perl
-# Copyright (C) 2010-2013, Parrot Foundation.
+# Copyright (C) 2010-2014, Parrot Foundation.
 # auto/libffi-01.t
 
 use strict;
 use warnings;
-use Test::More tests => 17;
+use Test::More tests => 16;
 use Carp;
 use lib qw( lib t/configure/testlib );
 use_ok('config::auto::libffi');
@@ -14,7 +14,7 @@ use Parrot::Configure::Test qw(
     test_step_constructor_and_description
 );
 
-use IO::CaptureOutput qw| capture |;
+use Parrot::Configure::Utils qw| capture |;
 
 ################### --without-libffi ###################
 
@@ -55,14 +55,9 @@ $conf->add_steps($pkg);
 $conf->options->set( %{$args} );
 $step = test_step_constructor_and_description($conf);
 {
-    my $stdout;
-    my $ret = capture(
-        sub { $step->runstep($conf) },
-        \$stdout
-    );
+    my ($ret, $stdout) = capture( sub { $step->runstep($conf) } );
     ok( $ret, "runstep() returned true value" );
     ok( defined( $step->result ), 'result defined' );
-    ok( $stdout, 'Some verbose output captured' );
 }
 # Prepare for next tests
 $step->set_result( undef );

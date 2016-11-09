@@ -1,5 +1,5 @@
 #!./parrot
-# Copyright (C) 2001-2011, Parrot Foundation.
+# Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -22,7 +22,7 @@ out-of-bounds test. Checks INT and PMC keys.
     .include 'fp_equality.pasm'
     .include 'test_more.pir'
 
-    plan(151)
+    plan(163)
 
     init_tests()
     resize_tests()
@@ -45,12 +45,13 @@ out-of-bounds test. Checks INT and PMC keys.
     pop_empty()
     multikey_access()
     exists_and_defined()
-    delete_keyed()
+    test_delete()
     get_rep()
     append_tests()
     splice_tests()
     splice_replace1()
-    splice_replace2()
+    splice_replace_shrink()
+    splice_shrink_fast()
     iterate_subclass_of_rpa()
     method_forms_of_unshift_etc()
     sort_with_broken_cmp()
@@ -61,6 +62,7 @@ out-of-bounds test. Checks INT and PMC keys.
     test_assign_self()
     test_assign_non_array()
     method_reverse()
+    test_resize_off()
 .end
 
 .sub init_negative
@@ -751,7 +753,7 @@ handle_p:
     is(def, 0, "element at idx 5 is not defined")
 .end
 
-.sub delete_keyed
+.sub test_delete
     .local pmc array
     array = new ['ResizablePMCArray']
     push array, 'a'
@@ -759,8 +761,16 @@ handle_p:
     push array, 'c'
     $P0 = new 'Integer', 1
     delete array[$P0]
-    $S0 = array[1]
-    is($S0, 'c', 'delete_keyed with PMC key')
+    $S0 = join "", array
+    is($S0, "ac", 'delete_keyed with PMC key')
+    delete array[0]
+    $S0 = join "", array
+    is($S0, 'c', 'delete[0]')
+    push array, 'b'
+    push array, 'a'
+    delete array[1]
+    $S0 = join "", array
+    is($S0, 'ca', 'delete[1]')
 .end
 
 .sub get_rep
@@ -859,14 +869,16 @@ loop_end:
 
 .sub splice_tests
     .local pmc ar1, ar2
-    ar1 = new ['ResizablePMCArray']
-    ar1[0] = 1
-    ar1[1] = 2
-    ar1[2] = 3
-    ar1[3] = 4
-    ar1[4] = 5
+    ar1 = new ['ResizablePMCArray'], 6
+    ar1[0] = 0
+    ar1[1] = 1
+    ar1[2] = 2
+    ar1[3] = 3
+    ar1[4] = 4
+    ar1[5] = 5
+    shift $P0, ar1
 
-    ar2 = new ['ResizablePMCArray']
+    ar2 = new ['ResizablePMCArray'], 5
     ar2[0] = 'A'
     ar2[1] = 'B'
     ar2[2] = 'C'
@@ -958,6 +970,34 @@ too_low:
     finalize $P9
 too_low_end:
     ok($I0, "splice with negative offset too low")
+
+    .local pmc p0, p1
+    p0 = new ['ResizablePMCArray']
+    p1 = new ['ResizablePMCArray']
+    push p0, 'A'
+    push p0, 'B'
+    push p0, 'C'
+    push p0, 'D'
+    push p0, 'E'
+    push p0, 'F'
+    push p0, 'G'
+    push p0, 'H'
+    push p1, 'a'
+    push p1, 'b'
+    # create offset=7
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    # warn 'splice() offset past end of array' #1176
+    # rpa splice (7,1,8)
+    # p0: H, p1: ab
+    splice p0, p1, 2, 2
+    $S0 = join '', p0
+    is($S0, "Hab", "splice with offset arg > size, adjust offset - GH #1176")
 .end
 
 
@@ -972,11 +1012,11 @@ too_low_end:
     $P2[0] = 'A'
     splice $P1, $P2, 1, 2
     $S0 = join "", $P1
-    is($S0, "1A", "replacement via splice works")
+    is($S0, "1A", "splice replace 1,2")
 .end
 
 
-.sub splice_replace2
+.sub splice_replace_shrink
     $P1 = new ['ResizablePMCArray']
     $P1 = 3
     $P1[0] = '1'
@@ -985,11 +1025,95 @@ too_low_end:
     $P2 = new ['ResizablePMCArray']
     $P2 = 1
     $P2[0] = 'A'
-    splice $P1, $P2, 0, 2
+    splice $P1, $P2, 0, 2  # 0,3,8 off=0, count=2, elems1=1, tail=1, sizediff=1
     $S0 = join "", $P1
-    is($S0, "A3", "replacement via splice works")
+    is($S0, "A3", "splice shrink slow")
+
+    .local pmc p0, p1
+    p0 = new ['ResizablePMCArray']
+    p1 = new ['ResizablePMCArray']
+    push p0, 'A'
+    push p0, 'B'
+    push p0, 'C'
+    push p0, 'D'
+    push p0, 'E'
+    push p1, 'a'
+    # create offset=1
+    $I0 = shift p0
+    # rpa splice (1,4,8)
+    # p0: BCDE, p1: a
+    splice p0, p1, 1, 2
+    $S0 = join '', p0
+    is($S0, "BaE", "splice shrink - GH #1174")
+
+    p0 = 0
+    p1 = 0
+    push p0, 'A'
+    push p0, 'B'
+    push p0, 'C'
+    push p0, 'D'
+    push p1, 'a'
+    # create offset=1
+    $I0 = shift p0
+    # rpa splice (1,3,8)
+    # p0: BCD, p1: a
+    splice p0, p1, 0, 2
+    $S0 = join '', p0
+    is($S0, "aD", "splice shrink - GH #1174")
 .end
 
+.sub splice_shrink_fast
+    $P1 = new ['ResizablePMCArray']
+    $P1 = 4
+    $P1[0] = '0'
+    $P1[1] = '1'
+    $P1[2] = '2'
+    $P1[3] = '3'
+    $P2 = new ['ResizablePMCArray']
+    $P2 = 1
+    $P2[0] = 'A'
+    $I0 = shift $P1        # create offset to fill in $P2. now same as P1 above
+    splice $P1, $P2, 0, 2  # 1,3,8 off=0, count=2, elems1=1, tail=3, sizediff=1
+    $S0 = join "", $P1
+    is($S0, "A3", "splice shrink fast")
+
+    # GH 1174
+    .local pmc p0, p1
+    p0 = new ['ResizablePMCArray']
+    p1 = new ['ResizablePMCArray']
+    p1 = 0
+    push p0, 'A'
+    push p0, 'B'
+    push p0, 'C'
+    push p0, 'D'
+    push p0, 'E'
+    # create offset=3
+    $I0 = shift p0
+    $I0 = shift p0
+    $I0 = shift p0
+    # rpa splice DE (5, 3, 8)
+    p0 = splice p1, 0, 1
+    $S0 = join '', p0
+    is($S0, "E", "splice shrink fast - GH #1174")
+
+    p0 = 0
+    p1 = 0
+    push p0, 'A'
+    push p0, 'B'
+    push p0, 'C'
+    push p0, 'D'
+    push p0, 'E'
+    push p0, 'F'
+    push p0, 'G'
+    # create offset=2
+    $I0 = shift p0
+    $I0 = shift p0
+    # rpa splice (2,5,8)
+    # p0: CDEFG, p1:
+    splice p0, p1, 0, 2
+    $S0 = join '', p0
+    is($S0, "EFG", "splice shrink fast - jump to copy, adjust new size also")
+.end
 
 .sub iterate_subclass_of_rpa
     .local pmc arr, it
@@ -1215,6 +1339,69 @@ CODE
     is($S0, "43156", "method_reverse - five elements second reverse")
 .end
 
+# coverage of other important codepaths
+#     perl -lne'/^\s+TRACE_RPA\w*\("(.+?)"/ && print $1' src/pmc/resizablepmcarray.pmc | sort | uniq > rpa.src
+# vs: ./parrot_old -t20 t/pmc/resizablepmcarray.t >rpa 2>&1
+#     perl -lne'/^# rpa (.+?):/ && print $1' rpa | sort | uniq -c > rpa.cover
+# diff -bu rpa.src rpa.cover:
+#   -resize off empty
+#   -resize off move
+#   -splice shrink fast
+.sub test_resize_off
+    .local pmc a
+    .local int i
+    a = new ['ResizablePMCArray']
+    a = 7
+
+    $P0 = new 'Integer', 1
+    unshift a, $P0
+    i = 0
+shift_fast:
+    $P1 = shift a
+    inc i
+    if i < 8 goto shift_fast
+
+resize_off_empty: #8,0,8
+    a = 6
+resize_off_move:  #2,6,8
+    push a, $P0   #1,7,8
+    $P1 = shift a #2,6,8
+    push a, $P0   #1,7,8
+    $P1 = shift a #2,6,8
+    $P1 = shift a #3,5,8
+    $P1 = shift a #4,4,8
+    $P1 = shift a #5,3,8
+    push a, $P0   #4,4,8 off move
+    $P1 = shift a #4,4,8
+    $P1 = shift a
+    $P1 = shift a
+    $P1 = shift a
+
+    elements $I0, a
+    is(a, 0, "resize off elements")
+    $I0 = $P1
+    is($I0, 1, "resize off item")
+
+# freeze: shift fast until resize off move + push slow
+# testing the resize off move slack
+    push a, 1     #1    slow 7,1,8
+    push a, 2     #12   slow 6,2,8
+    push a, 3     #123  slow 5,3,8
+    push a, 4     #1234 slow
+    $P1 = shift a #234  fast
+    push a, 5     #2345 slow
+    $S0 = join "", a
+    is($S0, "2345", "freeze pattern 1")
+    $P1 = shift a #345  fast
+    a = 2         #34
+    $P1 = shift a #4    fast
+    unshift a, 0  #04   fast
+    push a, 6     #046  fast
+    push a, 7     #0467 slow
+    unshift a, 9  #90467 slow
+    $S0 = join "", a
+    is($S0, "90467", "freeze pattern 2")
+.end
 
 # don't forget to change the test plan
 

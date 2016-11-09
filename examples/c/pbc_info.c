@@ -1,9 +1,9 @@
 /*
-Copyright (C) 2001-2010, Parrot Foundation.
+Copyright (C) 2001-2014, Parrot Foundation.
 
 =head1 NAME
 
-pbc_info - PackFile demo
+pbc_info - Old PackFile demo (deprecated API)
 
 =head1 SYNOPSIS
 
@@ -13,6 +13,8 @@ pbc_info - PackFile demo
 
 Sample program for dumping PackFile segment names by iterating
 over the main directory.
+
+Note this still uses the old deprecated API.
 
 =head2 Functions
 
@@ -74,11 +76,11 @@ main(SHIM(int argc), char *argv[])
     /*
      * add some more segments
      */
-    seg = PackFile_Segment_new_seg(interp,
+    seg = Parrot_pf_new_segment(interp,
                     &pf->directory, PF_DIR_SEG, "dir2", 1);
-    seg = PackFile_Segment_new_seg(interp,
+    seg = Parrot_pf_new_segment(interp,
                     (PackFile_Directory*)seg, PF_BYTEC_SEG, "code", 1);
-    seg = PackFile_Segment_new_seg(interp,
+    seg = Parrot_pf_new_segment(interp,
                     &pf->directory, PF_DIR_SEG, "dir3", 1);
 
     /*

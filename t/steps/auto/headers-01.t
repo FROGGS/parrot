@@ -1,5 +1,5 @@
 #! perl
-# Copyright (C) 2007-2011, Parrot Foundation.
+# Copyright (C) 2007-2014, Parrot Foundation.
 # auto/headers-01.t
 
 use strict;
@@ -14,7 +14,7 @@ use Parrot::Configure::Step::Test;
 use Parrot::Configure::Test qw(
     test_step_constructor_and_description
 );
-use IO::CaptureOutput qw | capture |;
+use Parrot::Configure::Utils qw | capture |;
 
 ########## regular ##########
 
@@ -55,8 +55,7 @@ $conf->options->set( %{$args} );
 $step = test_step_constructor_and_description($conf);
 {
     my $rv;
-    my $stdout;
-    capture ( sub {$rv = $step->runstep($conf) }, \$stdout);
+    my $stdout = capture ( sub {$rv = $step->runstep($conf) } );
     ok( $stdout, "verbose output captured" );
     ok( $rv, "runstep() returned true value" );
     is($step->result(), q{}, "Result is empty string as expected");

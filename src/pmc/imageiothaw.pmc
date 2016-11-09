@@ -68,7 +68,7 @@ Destroys the PMC.
 */
 
     VTABLE void destroy() :no_wb {
-        PackFile_destroy(INTERP, PARROT_IMAGEIOTHAW(SELF)->pf);
+        Parrot_pf_destroy(INTERP, PARROT_IMAGEIOTHAW(SELF)->pf);
         PARROT_IMAGEIOTHAW(SELF)->pf = NULL;
     }
 
@@ -115,18 +115,18 @@ Thaws the PMC contained in C<image>.
                  GROW_TO_16_BYTE_BOUNDARY(PACKFILE_HEADER_BYTES);
             int unpacked_length;
 
-            PARROT_IMAGEIOTHAW(SELF)->pf   = PackFile_new(INTERP, 0);
+            PARROT_IMAGEIOTHAW(SELF)->pf   = Parrot_pf_new(INTERP, 0);
             PObj_custom_destroy_SET(SELF);
 
             PARROT_IMAGEIOTHAW(SELF)->pf->options |= PFOPT_PMC_FREEZE_ONLY;
-            unpacked_length = PackFile_unpack(INTERP, PARROT_IMAGEIOTHAW(SELF)->pf,
+            unpacked_length = Parrot_pf_unpack(INTERP, PARROT_IMAGEIOTHAW(SELF)->pf,
                                 PARROT_IMAGEIOTHAW(SELF)->curs,
                                 Parrot_str_byte_length(interp, image));
 
             if (unpacked_length)
                 PARROT_IMAGEIOTHAW(SELF)->curs += header_length / sizeof (opcode_t*);
             else
-                Parrot_ex_throw_from_c_args(INTERP, NULL,
+                Parrot_ex_throw_from_c_noargs(INTERP,
                         EXCEPTION_INVALID_STRING_REPRESENTATION,
                         "PackFile header failed during unpack");
         }
@@ -347,7 +347,7 @@ Retrieve a PMC as the next item from the image.
                 PARROT_ASSERT(id - 1 == VTABLE_elements(INTERP, seen));
 
                 if (type <= 0 || type > INTERP->n_vtable_max)
-                    Parrot_ex_throw_from_c_args(INTERP, NULL, 1,
+                    Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_INVALID_OPERATION,
                             "Unknown PMC type to thaw %d", type);
 
                 pmc = Parrot_pmc_new_noinit(INTERP, type);
@@ -357,7 +357,7 @@ Retrieve a PMC as the next item from the image.
             }
             break;
           default:
-            Parrot_ex_throw_from_c_args(INTERP, NULL, 1,
+            Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_INVALID_OPERATION,
                     "Unknown PMC id args thaw %d", packid_flags);
             break;
         }

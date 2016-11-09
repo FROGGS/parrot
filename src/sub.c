@@ -171,7 +171,7 @@ Parrot_sub_context_get_info(PARROT_INTERP, ARGIN(PMC *ctx),
             if (n >= offs) {
                 /* set source line and file */
                 info->line = debug->base.data[i];
-                info->file = Parrot_debug_pc_to_filename(interp, debug, i);
+                info->file = Parrot_pf_debug_pc_to_filename(interp, debug, i);
                 break;
             }
             ADD_OP_VAR_PART(interp, sub->seg, pc, var_args);
@@ -267,7 +267,7 @@ Parrot_sub_get_filename_from_pc(PARROT_INTERP, ARGIN_NULLOK(PMC *subpmc),
     debug    = sub->seg->debugs;
     position = pc - sub->seg->base.data;
 
-    return Parrot_debug_pc_to_filename(interp, debug, position);
+    return Parrot_pf_debug_pc_to_filename(interp, debug, position);
 }
 
 /*
@@ -472,8 +472,8 @@ Parrot_sub_continuation_check(PARROT_INTERP, ARGIN(const PMC *pmc))
     ASSERT_ARGS(Parrot_sub_continuation_check)
     PMC * const to_ctx       = PARROT_CONTINUATION(pmc)->to_ctx;
     if (PMC_IS_NULL(to_ctx))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                       "Continuation invoked after deactivation.");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+                       "Continuation invoked after deactivation");
 }
 
 /*
@@ -568,8 +568,8 @@ Parrot_get_sub_pmc_from_subclass(PARROT_INTERP, ARGIN(PMC *subclass)) {
             return PARROT_SUB(sub_pmc);
         }
     }
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Attempting to do sub operation on non-Sub.");
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Attempting to do sub operation on non-Sub");
 }
 
 /*

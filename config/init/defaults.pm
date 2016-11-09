@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2014, Parrot Foundation.
+# Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -79,6 +79,10 @@ sub runstep {
 
     my $ccdlflags = $Config{ccdlflags};
     $ccdlflags =~ s/\s*-Wl,-rpath,\S*//g if $conf->options->get('disable-rpath');
+    $ccdlflags =~ s/-Xlink.*perl\.exp// if $Config{osname} eq 'aix';
+
+    my $lddlflags = $Config{lddlflags};
+    $lddlflags =~ s/-Wl,-bI:\$\(PERL_INC\)\/perl\.exp -Wl,-bE:\$\(BASEEXT\)\.exp// if $Config{osname} eq 'aix';
 
     my $build_dir =  abs_path($FindBin::Bin);
 
@@ -86,6 +90,7 @@ sub runstep {
     my $debugging = $conf->options->get('debugging');
     my $disable_static = $conf->options->get('disable-static');
     my $disable_shared = $conf->options->get('disable-shared');
+    my $POSIX = $^O !~ /^(MSWin|VMS|riscos|amiga|beos|mpeix|os390|os400|vmesa|VOS|dos|os2)/;
     # We need a Glossary somewhere!
     $conf->data->set(
         debugging => $debugging ? 1 : 0,
@@ -138,11 +143,11 @@ sub runstep {
         # Some operating systems (e.g. Darwin) distinguish between shared
         # libraries and modules that can be dynamically loaded.  Flags to tell
         # ld to build a shared library, e.g.  -shared for GNU ld.
-        ld_share_flags => $Config{lddlflags},
+        ld_share_flags => $lddlflags,
 
         # Flags to tell ld to build a dynamically loadable module, e.g.
         # -shared for GNU ld, -bundle -undefined dynamic_lookup on darwin.
-        ld_load_flags => $Config{lddlflags},
+        ld_load_flags => $lddlflags,
 
         libs => $Config{libs},
 
@@ -182,6 +187,7 @@ sub runstep {
         # libparrot library names
         libparrot_static => $disable_static ? '' : 'libparrot' . $Config{_a},
         libparrot_shared => $disable_shared ? '' : 'libparrot.' . $Config{so},
+        inst_libparrot_shared => $disable_shared ? '' : 'libparrot.' . $Config{so},
 
         # does the system know about static/dynamic linking?
         has_static_linking  => $disable_static ? 0 : 1,
@@ -192,19 +198,20 @@ sub runstep {
 
         #avoid a warning during Configure.pl
         libparrot_soname => '',
+        inst_libparrot_soname => '',
 
         perl      => $^X,
         test_prog => 'parrot',
 
         # some utilities in Makefile
-        cat       => '$(PERL) -MExtUtils::Command -e cat',
-        chmod     => '$(PERL) -MExtUtils::Command -e chmod',
-        cp        => '$(PERL) -MExtUtils::Command -e cp',
-        mkpath    => '$(PERL) -MExtUtils::Command -e mkpath',
-        mv        => '$(PERL) -MExtUtils::Command -e mv',
-        rm_f      => '$(PERL) -MExtUtils::Command -e rm_f',
-        rm_rf     => '$(PERL) -MExtUtils::Command -e rm_rf',
-        touch     => '$(PERL) -MExtUtils::Command -e touch',
+        cat       => $POSIX ? 'cat'    : '$(PERL) -MExtUtils::Command -e cat',
+        chmod     => $POSIX ? 'chmod'  : '$(PERL) -MExtUtils::Command -e chmod',
+        cp        => $POSIX ? 'cp'     : '$(PERL) -MExtUtils::Command -e cp',
+        mkpath    => $POSIX ? 'mkdir -p' : '$(PERL) -MExtUtils::Command -e mkpath',
+        mv        => $POSIX ? 'mv'     : '$(PERL) -MExtUtils::Command -e mv',
+        rm_f      => $POSIX ? 'rm -f'  : '$(PERL) -MExtUtils::Command -e rm_f',
+        rm_rf     => $POSIX ? 'rm -rf' : '$(PERL) -MExtUtils::Command -e rm_rf',
+        touch     => $POSIX ? 'touch'  : '$(PERL) -MExtUtils::Command -e touch',
 
         # added with 6.9.0 to hint at the rename ops2c => parrot-ops2c
         ops2c     => 'parrot-ops2c',
@@ -307,20 +314,37 @@ sub _64_bit_adjustments {
     my $m = $conf->options->get('m');
     if ($m) {
         my $archname = $conf->data->get('archname');
-        if ( $archname =~ /x86_64/ && $m eq '32' ) {
+        # crude logic for m32, mostly for non-gcc compilers.
+        # do it better for gcc and non-standard platforms in auto::gcc
+        if ( $archname =~ /(64$|64-)/ && $m eq '32' ) {
             $archname =~ s/x86_64/i386/;
 
-            # adjust gcc?
-            for my $cc (qw(cc cxx link ld)) {
-                $conf->data->add( ' ', $cc, '-m32' );
+            # adjust gcc or as fallback the flags
+            for my $cc (qw(cc ld link cxx)) {
+                if (!$conf->options->get($cc)) {
+                    $conf->debug( "Add -m32 to $cc" );
+                    $conf->data->add( ' ', $cc, '-m32' );
+                }
+                else {
+                    $conf->debug( "Add -m32 to $cc"."flags" );
+                    $conf->data->add( ' ', $cc.'flags', '-m32' );
+                }
             }
-
+            my $has_libpath_override;
             # and lib flags
             for my $lib (qw(ld_load_flags ld_share_flags ldflags linkflags)) {
                 my $item = $conf->data->get($lib);
-                ( my $ni = $item ) =~ s/lib64/lib/g;
-                $conf->data->set( $lib, $ni );
+                if ($item) {
+                    my $olditem = $item;
+                    $item =~ s/lib64/lib/g;
+                    if ($olditem ne $item and !$conf->options->get($lib)) {
+                        $conf->data->set( $lib, $item ) ;
+                        $conf->debug( "Set has_libpath_override to lib64, changing $lib to $item" );
+                        $has_libpath_override++;
+                    }
+                }
             }
+            $conf->data->set( 'has_libpath_override', 'lib64') if $has_libpath_override;
         }
         $conf->data->set( 'archname', $archname );
     }

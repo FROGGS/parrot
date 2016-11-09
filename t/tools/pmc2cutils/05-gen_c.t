@@ -24,7 +24,7 @@ use File::Basename;
 use File::Copy;
 use FindBin;
 use_ok('Parrot::Pmc2c::Pmc2cMain');
-use IO::CaptureOutput qw| capture |;
+use Parrot::Configure::Utils qw| capture |;
 use_ok('Cwd');
 use_ok( 'File::Temp', qw| tempdir | );
 
@@ -172,13 +172,9 @@ my ( $tie, $msg, @lines );
     ### $self->dump_pmc();
 
     {
-        my $stdout;
-        capture(
-            sub { eval { $rv = $self->gen_c(); } },
-            \$stdout
-        );
-        like(
-            $@,
+        my ( $rv, $stdout, $stderr, $retval ) =
+          capture( sub { $rv = $self->gen_c(); } );
+        like($retval,
             qr<^cannot find file '.*/src/pmc/default.dump' in path>,
             "gen_c() predictably failed because dump_pmc() was not called first"
         );

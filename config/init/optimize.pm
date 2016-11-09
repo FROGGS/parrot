@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2010, Parrot Foundation.
+# Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -30,7 +30,6 @@ sub runstep {
     my ( $self, $conf ) = @_;
 
     $conf->debug("\n");
-
     $conf->debug("(optimization options: init::optimize)\n");
 
     # A plain --optimize means use perl5's $Config{optimize}.  If an argument
@@ -53,6 +52,9 @@ sub runstep {
         my $gccversion = $conf->data->get( 'gccversion' );
         if ( defined $gccversion and $gccversion > 3.3 ) {
             $optimization_level =~ s/-mcpu=/-march=/;
+            # However, perl5 is not really optimize clean. But we can use -O3 safely
+            # on clang and gcc.
+            $optimization_level =~ s/-O2/-O3/;
         }
     }
     else {
@@ -68,7 +70,7 @@ sub runstep {
     $conf->data->set( cc_debug => '' );
     $conf->data->add( ' ', ccflags => "-DDISABLE_GC_DEBUG=1 -DNDEBUG" );
 
-    # TT #405
+    # TT #405 and GH #1184, Testcase: t/stress/gc.t (any)
     if ($conf->data->get('cpuarch') eq 'amd64') {
         $conf->data->set('optimize::src/gc/system.c','');
     }

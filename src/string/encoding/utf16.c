@@ -235,8 +235,8 @@ utf16_scan(PARROT_INTERP, ARGMOD(STRING *src))
     utf16_partial_scan(interp, src->strstart, &bounds);
 
     if (bounds.bytes != src->bufused)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_UTF16,
-            "Unaligned end in UTF-16 string\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_UTF16,
+            "Unaligned end in UTF-16 string");
 
     src->strlen = bounds.chars;
 }
@@ -283,20 +283,20 @@ utf16_partial_scan(PARROT_INTERP, ARGIN(const char *buf),
             ++i;
 
             if (!UNICODE_IS_LOW_SURROGATE(p[i]))
-                Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_UTF16,
-                    "Malformed UTF-16 string\n");
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_UTF16,
+                    "Malformed UTF-16 string");
 
             c = UNICODE_DECODE_SURROGATE(c, p[i]);
         }
         else {
             if (UNICODE_IS_LOW_SURROGATE(c))
-                Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_UTF16,
-                    "Malformed UTF-16 string\n");
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_UTF16,
+                    "Malformed UTF-16 string");
         }
 
         if (UNICODE_IS_NON_CHARACTER(c))
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                "Non-character in UTF-16 string\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                "Non-character in UTF-16 string");
 
         ++chars;
 
@@ -415,16 +415,16 @@ utf16_encode(PARROT_INTERP, ARGMOD(utf16_t *ptr), UINTVAL c)
     if (c < 0xFFFE) {
         if (UNICODE_IS_SURROGATE(c)
         || (c >= 0xFDD0 && c <= 0xFDEF))
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                    "Invalid character for UTF-16 encoding\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                    "Invalid character for UTF-16 encoding");
 
         *ptr++ = c;
     }
     else {
         if ((c & 0xFFFE) == 0xFFFE
         ||   c > 0x10FFFF)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                    "Invalid character for UTF-16 encoding\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                    "Invalid character for UTF-16 encoding");
 
         *ptr++ = UNICODE_HIGH_SURROGATE(c);
         *ptr++ = UNICODE_LOW_SURROGATE(c);
@@ -481,7 +481,7 @@ utf16_iter_get(PARROT_INTERP,
     ASSERT_ARGS(utf16_iter_get)
     const utf16_t *ptr = (utf16_t *)(str->strstart + i->bytepos);
 
-    PARROT_ASSERT((UINTVAL)(i->charpos + offset) <= str->strlen);
+    PARROT_ASSERT((i->charpos + offset) <= str->strlen);
 
     if (offset > 0)
         ptr = utf16_skip_forward(ptr, offset);
@@ -614,6 +614,7 @@ static STR_VTABLE Parrot_utf16_encoding = {
     unicode_upcase,
     unicode_downcase,
     unicode_titlecase,
+    unicode_foldcase,
     unicode_upcase_first,
     unicode_downcase_first,
     unicode_titlecase_first,

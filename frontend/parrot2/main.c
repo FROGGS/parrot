@@ -93,9 +93,6 @@ static void print_parrot_string(
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*vector);
 
-PARROT_CANNOT_RETURN_NULL
-static void setup_imcc(Parrot_PMC interp);
-
 static void show_last_error_and_exit(Parrot_PMC interp);
 static void usage(ARGMOD(FILE *fp))
         __attribute__nonnull__(1)
@@ -117,7 +114,6 @@ static void usage(ARGMOD(FILE *fp))
     , PARROT_ASSERT_ARG(argv))
 #define ASSERT_ARGS_print_parrot_string __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(vector))
-#define ASSERT_ARGS_setup_imcc __attribute__unused__ int _ASSERT_ARGS_CHECK = (0)
 #define ASSERT_ARGS_show_last_error_and_exit __attribute__unused__ int _ASSERT_ARGS_CHECK = (0)
 #define ASSERT_ARGS_usage __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(fp))
@@ -198,30 +194,6 @@ main(int argc, const char *argv[])
     Parrot_api_destroy_interpreter(interp);
     exit(EXIT_SUCCESS);
 }
-
-/*
-
-=item C<static void setup_imcc(Parrot_PMC interp)>
-
-Call into IMCC to either compile or preprocess the input.
-
-=cut
-
-*/
-
-PARROT_CANNOT_RETURN_NULL
-static void
-setup_imcc(Parrot_PMC interp)
-{
-    ASSERT_ARGS(setup_imcc)
-    Parrot_PMC pir_compiler = NULL;
-    Parrot_PMC pasm_compiler = NULL;;
-
-    if (!(imcc_get_pir_compreg_api(interp, 1, &pir_compiler) &&
-          imcc_get_pasm_compreg_api(interp, 1, &pasm_compiler)))
-        show_last_error_and_exit(interp);
-}
-
 
 /*
 
@@ -400,6 +372,8 @@ help_debug(void)
 #ifdef MEMORY_DEBUG
     "    0100    GC traces\n"
     "    0200    every single alloc/free\n"
+#else
+    "    (more with --ccflags=-DMEMORY_DEBUG)\n"
 #endif
     "\n"
     "--trace -t [Flags] ...\n"
@@ -409,7 +383,8 @@ help_debug(void)
     printf(
     "    0004    function calls\n"
     "    0008    coro states\n"
-    "    0010    pmc flags\n");
+    "    0010    pmc flags\n"
+    "    0020    array states\n");
 #else
     printf(
     "    0010    pmc flags\n"

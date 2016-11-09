@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2013, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -80,8 +80,13 @@ PARROT_DYNEXT_EXPORT float  nci_fff(float, float);
 PARROT_DYNEXT_EXPORT int    nci_i(void);
 PARROT_DYNEXT_EXPORT int    nci_ib(int *);
 PARROT_DYNEXT_EXPORT int    nci_iiii(int, int, int);
+PARROT_DYNEXT_EXPORT int    nci_ii2(int, short *);
+PARROT_DYNEXT_EXPORT int    nci_ii3(int, int *);
 PARROT_DYNEXT_EXPORT int    nci_ip(void *);
 PARROT_DYNEXT_EXPORT int    nci_isc(short, char);
+PARROT_DYNEXT_EXPORT int    nci_it(void *);
+PARROT_DYNEXT_EXPORT int    nci_i33(ARGMOD(int *), ARGMOD(int *));
+PARROT_DYNEXT_EXPORT int    nci_i4i(ARGMOD(long *), int);
 PARROT_DYNEXT_EXPORT long   nci_l(void);
 PARROT_DYNEXT_EXPORT int *  nci_p(void);
 PARROT_DYNEXT_EXPORT void * nci_pi(int);
@@ -92,15 +97,16 @@ PARROT_DYNEXT_EXPORT void * nci_pp(void *);
 PARROT_DYNEXT_EXPORT short  nci_s(void);
 PARROT_DYNEXT_EXPORT short  nci_ssc(short, char);
 PARROT_DYNEXT_EXPORT char * nci_t(void);
-PARROT_DYNEXT_EXPORT char * nci_tt(const char *);
+PARROT_DYNEXT_EXPORT char * nci_tt(ARGIN(const char *));
+PARROT_DYNEXT_EXPORT char * nci_ttt(ARGIN(const char *), ARGIN(const char *));
 PARROT_DYNEXT_EXPORT void   nci_v(void);
-PARROT_DYNEXT_EXPORT void   nci_vP(void *);
+PARROT_DYNEXT_EXPORT void   nci_vP(ARGIN(void *));
 PARROT_DYNEXT_EXPORT void   nci_vpii(ARGMOD(Outer *), int, int);
 PARROT_DYNEXT_EXPORT void   nci_vv(void);
 PARROT_DYNEXT_EXPORT void   nci_vp(ARGIN(const Opaque*));
 PARROT_DYNEXT_EXPORT void * nci_pv(void);
 PARROT_DYNEXT_EXPORT void   nci_vfff(float, float, float);
-PARROT_DYNEXT_EXPORT char * nci_cstring_cstring(const char *);
+PARROT_DYNEXT_EXPORT char * nci_cstring_cstring(ARGIN(const char *));
 
 /* Declarations for callback tests */
 
@@ -291,6 +297,26 @@ nci_isc(short l1, char l2)
 
 /*
 
+=item C<PARROT_DYNEXT_EXPORT int nci_it(void *p)>
+
+Prints the first two characters in C<p>, in reversed order.  Returns 2.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+int
+nci_it(void *p)
+{
+    fprintf(stderr, "%c%c\n", ((char*) p)[1], ((char *) p)[0]);
+    fflush(stderr);
+
+    return 2;
+}
+
+/*
+
 =item C<PARROT_DYNEXT_EXPORT int nci_ip(void *p)>
 
 Performs a series of operations on values stored at pointer C<p>.
@@ -390,6 +416,87 @@ nci_iiii(int i1, int i2, int i3)
     fflush(stderr);
 
     return 2;
+}
+
+/*
+
+=item C<PARROT_DYNEXT_EXPORT int nci_ii2(int a, short *bp)>
+
+Multiplies C<a> and C<*bp> together and returns the result. Updates C<*bp>
+to the value 4711.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+int
+nci_ii2(int a, ARGMOD(short *bp))
+{
+    int r = a * *bp;
+    *bp = 4711;
+
+    return r;
+}
+
+/*
+
+=item C<PARROT_DYNEXT_EXPORT int nci_ii3(int a, int *bp)>
+
+Multiplies C<a> and C<*bp> together and returns the result. Updates C<*bp>
+to the value 4711.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+int
+nci_ii3(int a, ARGMOD(int *bp))
+{
+    int r = a * *bp;
+    *bp = 4711;
+
+    return r;
+}
+
+/*
+
+=item C<PARROT_DYNEXT_EXPORT int nci_i33(int *double_me, int *triple_me)>
+
+Doubles C<double_me> and triples C<triple_me>. Returns their sum.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+int
+nci_i33(ARGMOD(int *double_me), ARGMOD(int *triple_me))
+{
+    *double_me *= 2;
+    *triple_me *= 3;
+
+    return (*double_me + *triple_me);
+}
+
+/*
+
+=item C<PARROT_DYNEXT_EXPORT int nci_i4i(long *l, int i)>
+
+Returns the product of C<*l> and C<i>, as an int.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+PARROT_PURE_FUNCTION
+int
+nci_i4i(ARGIN(long *l), int i)
+{
+
+    return (int) (*l * i);
 }
 
 /*
@@ -608,16 +715,17 @@ Prints "ok" if C<PMC> is not null, prints "got null" otherwise.
 
 PARROT_DYNEXT_EXPORT
 void
-nci_vP(SHIM(void *pmc))
+nci_vP(ARGIN(void *pmc))
 {
     /* TODO:
      * Disable this test until someone figures a way to check for
      * PMCNULL without using libparrot.
     if (!PMC_IS_NULL(pmc))
+    */
+    if (pmc)
         puts("ok");
     else
-     */
-    puts("got null");
+        puts("got null");
 }
 
 
@@ -922,7 +1030,7 @@ static char s[] = "xx worked\n";
 
 PARROT_DYNEXT_EXPORT
 char *
-nci_tt(const char *p)
+nci_tt(ARGIN(const char *p))
 {
     s[0] = p[1];
     s[1] = p[0];
@@ -930,6 +1038,56 @@ nci_tt(const char *p)
     return s;
 }
 
+/*
+
+=item C<PARROT_DYNEXT_EXPORT char * nci_ttt(const char *s1, const char *s2)>
+
+Returns a c string from two c strings.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+char *
+nci_ttt(ARGIN(const char *s1), ARGIN(const char *s2))
+{
+    char* s = (char*) malloc((2 * strlen(s2)) + strlen(s1) + 5);
+    sprintf(s, "%s, %s, %s", s2, s2, s1);
+    printf("%s\n", s);
+    return s;
+}
+
+/*
+
+=item C<PARROT_DYNEXT_EXPORT char * nci_cstring_cstring(const char * src)>
+
+Copy the content of src to a static buffer, replacing 'l' with 'L' and
+return a pointer for the buffer.
+
+=cut
+
+*/
+
+PARROT_DYNEXT_EXPORT
+char *
+nci_cstring_cstring(ARGIN(const char * src))
+{
+    static char buffer[64];
+    const int maxl = sizeof buffer - 1;
+    int l = strlen(src);
+    int i;
+    if (l > maxl)
+        l = maxl;
+    for (i = 0; i < l; ++i) {
+        char c = src[i];
+        if (c == 'l')
+            c = 'L';
+        buffer[i] = c;
+    }
+    buffer[i] = '\0';
+    return buffer;
+}
 
 /*
 
@@ -1042,37 +1200,6 @@ nci_vfff(float l1, float l2, float l3)
     validate_float(l1, 3456.54);
     validate_float(l2, 10.1999);
     validate_float(l3, 14245.567);
-}
-
-/*
-
-=item C<PARROT_DYNEXT_EXPORT char * nci_cstring_cstring(const char * src)>
-
-Copy the content of src to a static buffer, replacing 'l' with 'L' and
-return a pointer for the buffer.
-
-=cut
-
-*/
-
-PARROT_DYNEXT_EXPORT
-char *
-nci_cstring_cstring(const char * src)
-{
-    static char buffer[64];
-    const int maxl = sizeof buffer - 1;
-    int l = strlen(src);
-    int i;
-    if (l > maxl)
-        l = maxl;
-    for (i = 0; i < l; ++i) {
-        char c = src[i];
-        if (c == 'l')
-            c = 'L';
-        buffer[i] = c;
-    }
-    buffer[i] = '\0';
-    return buffer;
 }
 
 #ifdef TEST

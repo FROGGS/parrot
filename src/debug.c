@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -1172,7 +1172,8 @@ Parrot_debugger_load(PARROT_INTERP, ARGIN_NULLOK(const STRING *filename))
     TRACEDEB_MSG("Parrot_debugger_load");
 
     if (!interp->pdb)
-        Parrot_ex_throw_from_c_args(interp, NULL, 0, "No debugger");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PARROT_USAGE_ERROR,
+                "No debugger");
 
     file = Parrot_str_to_cstring(interp, filename);
     PDB_load_source(interp, file);
@@ -1197,7 +1198,8 @@ Parrot_debugger_start(PARROT_INTERP, ARGIN_NULLOK(opcode_t * cur_opcode))
     TRACEDEB_MSG("Parrot_debugger_start");
 
     if (!interp->pdb)
-        Parrot_ex_throw_from_c_args(interp, NULL, 0, "No debugger");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PARROT_USAGE_ERROR,
+                "No debugger");
 
     interp->pdb->cur_opcode = interp->code->base.data;
 
@@ -1243,14 +1245,16 @@ Parrot_debugger_break(PARROT_INTERP, ARGIN(opcode_t * cur_opcode))
     TRACEDEB_MSG("Parrot_debugger_break");
 
     if (!interp->pdb)
-        Parrot_ex_throw_from_c_args(interp, NULL, 0, "No debugger");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PARROT_USAGE_ERROR,
+                "No debugger");
 
     if (!interp->pdb->file)
-        Parrot_ex_throw_from_c_args(interp, NULL, 0, "No file loaded to debug");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PARROT_USAGE_ERROR,
+                "No file loaded to debug");
 
     if (!(interp->pdb->state & PDB_BREAK)) {
         TRACEDEB_MSG("Parrot_debugger_break - in BREAK state");
-        new_runloop_jump_point(interp);
+        Parrot_runloop_new_jump_point(interp);
         if (setjmp(interp->current_runloop->resume)) {
             fprintf(stderr, "Unhandled exception in debugger\n");
             return;
@@ -1258,14 +1262,14 @@ Parrot_debugger_break(PARROT_INTERP, ARGIN(opcode_t * cur_opcode))
 
         interp->pdb->state     |= PDB_BREAK;
         interp->pdb->state     |= PDB_STOPPED;
-        interp->pdb->cur_opcode = (opcode_t *)cur_opcode + 1;
+        interp->pdb->cur_opcode = cur_opcode + 1;
 
         /*PDB_set_break(interp, NULL);*/
 
         debugger_cmdline(interp);
     }
     else {
-        interp->pdb->cur_opcode = (opcode_t *)cur_opcode + 1;
+        interp->pdb->cur_opcode = cur_opcode + 1;
         /*PDB_set_break(interp, NULL);*/
     }
     TRACEDEB_MSG("Parrot_debugger_break done");
@@ -1487,7 +1491,7 @@ PDB_next(PARROT_INTERP, ARGIN_NULLOK(const char *command))
 
     debugee     = pdb->debugee;
 
-    new_runloop_jump_point(debugee);
+    Parrot_runloop_new_jump_point(debugee);
     if (setjmp(debugee->current_runloop->resume)) {
         Parrot_io_eprintf(pdb->debugger, "Unhandled exception while tracing\n");
         pdb->state |= PDB_STOPPED;
@@ -1532,7 +1536,7 @@ PDB_trace(PARROT_INTERP, ARGIN_NULLOK(const char *command))
     debugee     = pdb->debugee;
 
     /* execute n ops */
-    new_runloop_jump_point(debugee);
+    Parrot_runloop_new_jump_point(debugee);
     if (setjmp(debugee->current_runloop->resume)) {
         Parrot_io_eprintf(pdb->debugger, "Unhandled exception while tracing\n");
         pdb->state |= PDB_STOPPED;
@@ -1869,7 +1873,7 @@ PDB_set_break(PARROT_INTERP, ARGIN_NULLOK(const char *command))
     newbreak = mem_gc_allocate_zeroed_typed(interp, PDB_breakpoint_t);
 
     if (! command) {
-        Parrot_ex_throw_from_c_args(interp, NULL, 1,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "NULL command passed to PDB_set_break");
     }
 
@@ -2252,7 +2256,7 @@ PDB_check_condition(PARROT_INTERP, ARGIN(const PDB_condition_t *condition))
 
     if (condition->type & PDB_cond_int) {
         INTVAL   i,  j;
-        if (condition->reg >= Parrot_pcc_get_regs_used(interp, ctx, REGNO_INT))
+        if (condition->reg >= PCC_GET_REGS_USED(ctx, REGNO_INT))
             return 0;
         i = CTX_REG_INT(interp, ctx, condition->reg);
 
@@ -2274,7 +2278,7 @@ PDB_check_condition(PARROT_INTERP, ARGIN(const PDB_condition_t *condition))
     else if (condition->type & PDB_cond_num) {
         FLOATVAL k,  l;
 
-        if (condition->reg >= Parrot_pcc_get_regs_used(interp, ctx, REGNO_NUM))
+        if (condition->reg >= PCC_GET_REGS_USED(ctx, REGNO_NUM))
             return 0;
         k = CTX_REG_NUM(interp, ctx, condition->reg);
 
@@ -2296,7 +2300,7 @@ PDB_check_condition(PARROT_INTERP, ARGIN(const PDB_condition_t *condition))
     else if (condition->type & PDB_cond_str) {
         STRING  *m, *n;
 
-        if (condition->reg >= Parrot_pcc_get_regs_used(interp, ctx, REGNO_STR))
+        if (condition->reg >= PCC_GET_REGS_USED(ctx, REGNO_STR))
             return 0;
         m = CTX_REG_STR(interp, ctx, condition->reg);
 
@@ -2327,7 +2331,7 @@ PDB_check_condition(PARROT_INTERP, ARGIN(const PDB_condition_t *condition))
     else if (condition->type & PDB_cond_pmc) {
         PMC *m;
 
-        if (condition->reg >= Parrot_pcc_get_regs_used(interp, ctx, REGNO_PMC))
+        if (condition->reg >= PCC_GET_REGS_USED(ctx, REGNO_PMC))
             return 0;
         m = CTX_REG_PMC(interp, ctx, condition->reg);
 
@@ -2696,7 +2700,7 @@ PDB_disassemble_op(PARROT_INTERP, ARGOUT(char *dest), size_t space,
             }
             break;
           case PARROT_ARG_PC:
-            Parrot_snprintf(interp, buf, sizeof (buf), "PMC_CONST(%d)", op[j]);
+            Parrot_snprintf(interp, buf, sizeof (buf), "PMC_CONST(%ld)", op[j]);
             strcpy(&dest[size], buf);
             size += strlen(buf);
             break;
@@ -2777,7 +2781,8 @@ PDB_disassemble_op(PARROT_INTERP, ARGOUT(char *dest), size_t space,
             dest[size++] = ']';
             break;
           default:
-            Parrot_ex_throw_from_c_args(interp, NULL, 1, "Unknown opcode type");
+            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_ARG_OP_NOT_HANDLED,
+                                        "Unknown opcode type %c", info->types[j - 1]);
         }
 
         if (j != info->op_count - 1)
@@ -3317,8 +3322,7 @@ PDB_assign(PARROT_INTERP, ARGIN(const char *command))
         Parrot_io_eprintf(debugger, "Invalid register type %c\n", reg_type_id);
         return;
     }
-    if (register_num >= Parrot_pcc_get_regs_used(debugee,
-                                CURRENT_CONTEXT(debugee), reg_type)) {
+    if (register_num >= PCC_GET_REGS_USED(CURRENT_CONTEXT(debugee), reg_type)) {
         no_such_register(debugger, reg_type_id, register_num);
         return;
     }
@@ -3672,7 +3676,7 @@ PDB_get_continuation_backtrace(PARROT_INTERP, ARGIN(PMC *ctx))
         }
         else if (rec_level != 0) {
             STRING * const fmt =
-                Parrot_sprintf_c(interp, "... call repeated %d times\n", rec_level);
+                Parrot_sprintf_c(interp, "... call repeated "UINTVAL_FMT" times\n", rec_level);
             VTABLE_push_string(interp, output, fmt);
             rec_level = 0;
         }
@@ -3683,7 +3687,7 @@ PDB_get_continuation_backtrace(PARROT_INTERP, ARGIN(PMC *ctx))
             const PackFile_ByteCode * const seg = PARROT_SUB(sub)->seg;
             VTABLE_push_string(interp, output, info_str);
             if (seg->annotations) {
-                PMC * const annot = PackFile_Annotations_lookup(interp, seg->annotations,
+                PMC * const annot = Parrot_pf_annotations_lookup(interp, seg->annotations,
                         Parrot_pcc_get_pc(interp, ctx) - seg->base.data,
                         NULL);
 
@@ -3710,7 +3714,8 @@ PDB_get_continuation_backtrace(PARROT_INTERP, ARGIN(PMC *ctx))
     }
 
     if (rec_level != 0) {
-        STRING * const fmt = Parrot_sprintf_c(interp, "... call repeated %d times\n", rec_level);
+        STRING * const fmt = Parrot_sprintf_c(interp,
+                               "... call repeated "UINTVAL_FMT" times\n", rec_level);
         VTABLE_push_string(interp, output, fmt);
     }
     return VTABLE_get_string(interp, output);
@@ -3749,7 +3754,7 @@ GDB_print_reg(PARROT_INTERP, int t, int n)
     ASSERT_ARGS(GDB_print_reg)
     char * string;
 
-    if (n >= 0 && (UINTVAL)n < Parrot_pcc_get_regs_used(interp, CURRENT_CONTEXT(interp), t)) {
+    if (n >= 0 && (UINTVAL)n < PCC_GET_REGS_USED(CURRENT_CONTEXT(interp), t)) {
         switch (t) {
           case REGNO_INT:
             return Parrot_str_from_int(interp, IREG(n));
@@ -3814,7 +3819,7 @@ GDB_P(PARROT_INTERP, ARGIN(const char *s))
     }
     if (! s[1]) {
         /* Print all registers of this type. */
-        const int max_reg = Parrot_pcc_get_regs_used(interp, CURRENT_CONTEXT(interp), t);
+        const int max_reg = PCC_GET_REGS_USED(CURRENT_CONTEXT(interp), t);
         int n;
 
         for (n = 0; n < max_reg; ++n) {

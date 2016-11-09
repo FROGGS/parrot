@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -32,16 +32,25 @@ extern int CONSERVATIVE_POINTER_CHASING;
 
 #ifndef MEMORY_DEBUG
 #  define MEMORY_DEBUG_DETAIL_2(s, a1, a2)
+#  define MEMORY_DEBUG_DETAIL_3(s, a1, a2, a3)
 #  define GC_DEBUG_DETAIL(s)
 #  define GC_DEBUG_DETAIL_FLAGS(s, pmc)
+#  define GC_DEBUG_DETAIL_STR(s, str)
 #  define GC_DEBUG_DETAIL_1_FLAGS(s, a1, pmc)
+#  define GC_DEBUG_DETAIL_1(s, a1)
 #  define GC_DEBUG_DETAIL_2(s, a1, a2)
 #  define GC_DEBUG_DETAIL_3(s, a1, a2, a3)
+#  define MEMORY_DEBUG_UNUSED(interp) UNUSED(interp)
 #else
+#  define MEMORY_DEBUG_UNUSED(interp)
 #  define MEMORY_DEBUG_DETAIL_2(s, a1, a2) \
     if (Interp_debug_TEST(interp, \
                 PARROT_MEM_STAT_DEBUG_FLAG | PARROT_MEM_DETAIL_DEBUG_FLAG)) \
         fprintf(stderr, (s), (a1), (a2))
+#  define MEMORY_DEBUG_DETAIL_3(s, a1, a2, a3)  \
+    if (Interp_debug_TEST(interp, \
+                PARROT_MEM_STAT_DEBUG_FLAG | PARROT_MEM_DETAIL_DEBUG_FLAG)) \
+        fprintf(stderr, (s), (a1), (a2), (a3))
 #  define GC_DEBUG_DETAIL(s) \
     if (Interp_debug_TEST(interp, \
                 PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) \
@@ -50,10 +59,18 @@ extern int CONSERVATIVE_POINTER_CHASING;
     if (Interp_debug_TEST(interp, \
                 PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) { \
         fprintf(stderr, (s)); trace_pmc_dump(interp, (pmc)); fprintf(stderr, "\n"); }
+#  define GC_DEBUG_DETAIL_STR(s, str) \
+    if (Interp_debug_TEST(interp, \
+                PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) { \
+        fprintf(stderr, (s)); trace_str_dump(interp, (str)); fprintf(stderr, "\n"); }
 #  define GC_DEBUG_DETAIL_1_FLAGS(s, a1, pmc) \
     if (Interp_debug_TEST(interp, \
                 PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) { \
         fprintf(stderr, (s), (a1)); trace_pmc_dump(interp, (pmc)); fprintf(stderr, "\n"); }
+#  define GC_DEBUG_DETAIL_1(s, a1)   \
+    if (Interp_debug_TEST(interp, \
+                PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) \
+        fprintf(stderr, (s), (a1))
 #  define GC_DEBUG_DETAIL_2(s, a1, a2) \
     if (Interp_debug_TEST(interp, \
                 PARROT_MEM_STAT_DEBUG_FLAG | PARROT_GC_DETAIL_DEBUG_FLAG)) \
@@ -80,7 +97,7 @@ PARROT_DOES_NOT_RETURN
 static void
 panic_failed_allocation(unsigned int line, size_t size)
 {
-    fprintf(stderr, "Failed allocation of %lu bytes\n", (unsigned long)size);
+    fprintf(stderr, "Failed allocation of "SIZE_FMT" bytes\n", size);
     Parrot_x_panic_and_exit(NULL, "Out of mem", __FILE__, line);
 }
 
@@ -156,7 +173,7 @@ typedef struct GC_Statistics {
     size_t  gc_mark_runs;       /* Number of times we've done a mark run */
     size_t  gc_lazy_mark_runs;  /* Number of successful lazy mark runs */
     size_t  gc_collect_runs;    /* Number of times we've done a memory
-                                   compaction */
+                                   compaction, currently for strings only. */
     size_t  mem_allocs_since_last_collect;      /* The number of memory
                                                  * allocations from the
                                                  * system since the last
@@ -197,6 +214,7 @@ typedef struct GC_Subsystem {
     void (*finalize_gc_system) (PARROT_INTERP);
     void (*destroy_child_interp)(ARGMOD(Interp *dest_interp), ARGIN(Interp *child_interp));
 
+    void (*maybe_gc_mark)(PARROT_INTERP, UINTVAL flags);
     void (*do_gc_mark)(PARROT_INTERP, UINTVAL flags);
     void (*compact_string_pool)(PARROT_INTERP);
 
@@ -238,15 +256,18 @@ typedef struct GC_Subsystem {
             size_t oldsize, size_t newsize);
     void (*free_memory_chunk)(PARROT_INTERP, ARGFREE(void *data));
 
+    /* locks and semaphores for the 3 phases or threaded access */
     void (*block_mark)(PARROT_INTERP);
     void (*unblock_mark)(PARROT_INTERP);
+    unsigned int (*is_blocked_mark)(PARROT_INTERP);
     void (*block_mark_locked)(PARROT_INTERP);
     void (*unblock_mark_locked)(PARROT_INTERP);
-    unsigned int (*is_blocked_mark)(PARROT_INTERP);
-
     void (*block_sweep)(PARROT_INTERP);
     void (*unblock_sweep)(PARROT_INTERP);
     unsigned int (*is_blocked_sweep)(PARROT_INTERP);
+    void (*block_move)(PARROT_INTERP);
+    void (*unblock_move)(PARROT_INTERP);
+    unsigned int (*is_blocked_move)(PARROT_INTERP);
 
     /* Introspection. Each GC must provide this function. Even with fake data */
     /* Return by value to simplify memory management */
@@ -379,16 +400,14 @@ typedef struct Memory_Pools {
     Fixed_Size_Pool     *constant_pmc_pool;
     Fixed_Size_Pool     *constant_string_header_pool;
     Fixed_Size_Pool    **sized_header_pools;
-    size_t               num_sized;
-
     PMC_Attribute_Pool **attrib_pools;
+    size_t               num_sized;
     size_t               num_attribs;
 
     /* GC blocking */
-    UINTVAL gc_mark_block_level;  /* How many outstanding GC block
-                                     requests are there? */
-    UINTVAL gc_sweep_block_level; /* How many outstanding GC block
-                                     requests are there? */
+    UINTVAL gc_mark_block_level:8;  /* Num of outstanding GC block requests */
+    UINTVAL gc_sweep_block_level:8; /* Num of outstanding GC block requests */
+    UINTVAL gc_move_block_level:8;  /* for the compacting/move phase */
 
     PMC    *gc_mark_start;        /* first PMC marked during a GC run */
     PMC    *gc_mark_ptr;          /* last PMC marked during a GC run */
@@ -710,16 +729,17 @@ void Parrot_gc_inf_init(PARROT_INTERP, Parrot_GC_Init_Args *args)
 /* HEADERIZER BEGIN: src/gc/gc_ms2.c */
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 
-void Parrot_gc_maybe_mark_and_sweep(PARROT_INTERP, UINTVAL flags)
-        __attribute__nonnull__(1);
+void gc_ms2_print_stats_always(PARROT_INTERP, ARGIN(const char* header))
+        __attribute__nonnull__(1)
+        __attribute__nonnull__(2);
 
 void Parrot_gc_ms2_init(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
 
-#define ASSERT_ARGS_Parrot_gc_maybe_mark_and_sweep \
-     __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
-       PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_gc_ms2_print_stats_always __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp) \
+    , PARROT_ASSERT_ARG(header))
 #define ASSERT_ARGS_Parrot_gc_ms2_init __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(args))

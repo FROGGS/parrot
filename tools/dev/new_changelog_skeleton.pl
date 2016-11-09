@@ -1,8 +1,15 @@
 #! perl
-# Copyright (C) 2012-2013, Parrot Foundation.
+# Copyright (C) 2012-2015, Parrot Foundation.
 
 use strict;
 use warnings;
+use autodie;
+use JSON;
+use lib 'lib';
+use Parrot::BuildUtil;
+
+my $changelog_path    = './Changelog';
+my $release_info_path = './tools/release/release.json';
 
 =head1 NAME
 
@@ -20,41 +27,44 @@ Run this command
 
 and then "git status" should show a modification to the ChangeLog file.
 
-=head1 AUTHOR
-
-Jonathan "Duke" Leto
-
 =cut
 
-sub read_changelog {
-    my ($x,$y,$z);
-    my ($year, $month, $day);
-
-    open (my $fh, '<', 'ChangeLog') or die $!;
-    for my $line (<$fh>) {
-        if ($line =~ m/(\d+)-(\d+)-(\d+).*release (\d+)\.(\d+)\.(\d+)/) {
-            ($year, $month, $day, $x,$y,$z) = ($1,$2,$3,$4,$5,$6);
-            return ($year, $month, $day, $x,$y,$z);
-        }
-    }
-    close $fh;
-    return;
+sub military_to_iso_date {
+    my ($in_date) = @_;
+    my $c = 1;
+    my @months = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+    my %months = map { uc($_) => sprintf('%02d', $c++) } @months;
+    my $months = join '|', @months;
+    $in_date =~ m{ \A \s* (\d{2}) \s ($months) \s (\d{4}) \s* \z }msix
+        or die;
+    return sprintf '%04d-%02d-%02d', $3, $months{uc $2}, $1;
 }
 
-sub run {
-    my ($year, $month, $day, $x, $y, $z) = read_changelog();
+my $original_lines = Parrot::BuildUtil::slurp_file($changelog_path);
+my $json           = Parrot::BuildUtil::slurp_file($release_info_path);
 
-    return unless $year && $x;
+my $href = decode_json($json)
+    or die "Failed to decode json";
 
-    $month eq '12' ? $month=1 : $month++;
+my ( $version, $next_date ) =
+    map { $href->{$_} or die "'$_' missing from $release_info_path" }
+    qw( release.version release.nextdate );
+    # "release.version"  : "7.7.0",
+    # "release.nextdate" : "15 Sep 2015",
 
-    $y     eq '11' ? ($x++, $y = 0, $z =0 ) : $y++;
+my ( $major, $minor, $patch ) = split /\./, $version;
+die unless defined $patch;
 
-    local $/;
-    open (my $fh, '<', 'ChangeLog') or die $!;
-    my $changelog = <$fh>;
-    my $skeleton =<<SKELETON;
-$year-$month-XX    release $x.$y.$z
+$minor++;
+if ( $minor == 12 ) {
+    $major++;
+    $minor = 0;
+}
+
+my $date_ymd = military_to_iso_date($next_date);
+
+my $skeleton =<<"SKELETON";
+$date_ymd    release $major.$minor.0
     - Core
     - Build
     - Documentation
@@ -63,12 +73,9 @@ $year-$month-XX    release $x.$y.$z
 
 SKELETON
 
-    open (my $wfh, '>', 'ChangeLog') or die $!;
-    print $wfh $skeleton, $changelog;
-    close $wfh;
-}
-
-run();
+open my $wfh, '>', $changelog_path;
+print $wfh $skeleton, $original_lines;
+close $wfh;
 
 # Local Variables:
 #   mode: cperl

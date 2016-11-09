@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2012, Parrot Foundation.
+Copyright (C) 2001-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -23,6 +23,7 @@ members, beside setting C<bufstart>/C<buflen> for external strings.
 */
 
 #include <stdio.h>
+#include <math.h>
 
 #include "parrot/parrot.h"
 #include "parrot/events.h"
@@ -408,7 +409,7 @@ Parrot_str_copy(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
         return STRINGNULL;
 
     d = Parrot_gc_new_string_header(interp,
-        PObj_get_FLAGS(s) & ~PObj_constant_FLAG);
+          PObj_get_FLAGS(s) & ~PObj_constant_FLAG);
 
     /* This might set the constant flag again but it is the right thing
      * to do */
@@ -733,12 +734,29 @@ Parrot_str_new_from_cstring(PARROT_INTERP, ARGIN_NULLOK(const char *buffer),
                 Parrot_platform_encoding_ptr :
                 Parrot_find_encoding_by_string(interp, encodingname);
         if (encoding == NULL)
-            Parrot_ex_throw_from_c_args(interp, NULL,
-                    EXCEPTION_INVALID_ENCODING,
-                    "Invalid encoding");
+            Parrot_ex_throw_from_c_noargs(interp,
+                    EXCEPTION_INVALID_ENCODING, "Invalid encoding");
         else {
             int size = strlen(buffer);
             result = Parrot_str_new_init(interp, buffer, size, encoding, 0);
+#if 0
+            /* if string is ascii and platform multi-byte we could downgrade.
+               but is is overall slower to scan here, than the faster ops later */
+            if (STRING_IS_NULL(encodingname)
+                && Parrot_platform_encoding_ptr->max_bytes_per_codepoint > 1
+                && result->strlen == result->bufused)
+            {
+                const unsigned char * const ptr = (unsigned char *)result->strstart;
+                int multi = 0;
+                UINTVAL i;
+                for (i = 0; i < result->strlen; ++i) {
+                    if (ptr[i] >= 0x80)
+                        multi++;
+                }
+                if (!multi)
+                    result->encoding = Parrot_ascii_encoding_ptr;
+            }
+#endif
         }
     }
     return result;
@@ -779,6 +797,12 @@ Parrot_str_from_platform_cstring(PARROT_INTERP, ARGIN_NULLOK(const char *c))
             Parrot_ex_add_c_handler(interp, &jmp);
             retv = Parrot_str_new_init(interp, c, Parrot_str_platform_strlen(interp, c),
                                         Parrot_platform_encoding_ptr, 0);
+            /* if string is ascii-only and platform multi-byte use ascii */
+            if (retv
+                && Parrot_platform_encoding_ptr->max_bytes_per_codepoint > 1
+                && retv->strlen == retv->bufused) {
+                retv = Parrot_ascii_encoding_ptr->to_encoding(interp, retv);
+            }
             Parrot_cx_delete_handler_local(interp);
         }
 
@@ -842,9 +866,9 @@ Parrot_str_extract_chars(PARROT_INTERP, ARGIN(const char *buffer),
     encoding->partial_scan(interp, buffer, &bounds);
 
     if (bounds.chars < chars)
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
                 EXCEPTION_OUT_OF_BOUNDS,
-                "extract_chars: index out of bounds");
+                "index out of bounds");
 
     result = Parrot_str_new_noinit(interp, bounds.bytes);
 
@@ -1259,25 +1283,25 @@ Parrot_str_replace(PARROT_INTERP, ARGIN(const STRING *src),
     INTVAL          buf_size;
 
     if (STRING_IS_NULL(src)) {
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Can't replace in NULL string");
     }
 
     /* abs(-offset) may not be > strlen-1 */
     if (offset < 0)
-        true_offset = (UINTVAL)(src->strlen + offset);
+        true_offset = src->strlen + offset;
 
     /* Can replace 1 past end of string which is technically outside the string
      * but is same as a concat().
      * Only give exception if caller trys to replace end of string + 2
      */
     if (true_offset > src->strlen)
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_SUBSTR_OUT_OF_STRING,
             "Can only replace inside string or index after end of string");
 
     if (true_length > (src->strlen - true_offset))
-        true_length = (UINTVAL)(src->strlen - true_offset);
+        true_length = src->strlen - true_offset;
 
     if (STRING_IS_NULL(rep)) {
         enc = src->encoding;
@@ -1309,7 +1333,7 @@ Parrot_str_replace(PARROT_INTERP, ARGIN(const STRING *src),
 
     /* not possible.... */
     if (end_byte < start_byte)
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_SUBSTR_OUT_OF_STRING,
             "replace: subend somehow is less than substart");
 
@@ -1845,7 +1869,8 @@ Parrot_str_boolean(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
 
 /*
 
-=item C<STRING * Parrot_str_format_data(PARROT_INTERP, const char *format, ...)>
+=item C<STRING * Parrot_str_format_data(PARROT_INTERP, ARGIN_FORMAT(const char
+*format), ...)>
 
 Writes and returns a Parrot string.
 
@@ -1856,7 +1881,7 @@ Writes and returns a Parrot string.
 PARROT_EXPORT
 PARROT_CANNOT_RETURN_NULL
 STRING *
-Parrot_str_format_data(PARROT_INTERP, ARGIN(const char *format), ...)
+Parrot_str_format_data(PARROT_INTERP, ARGIN_FORMAT(const char *format), ...)
 {
     ASSERT_ARGS(Parrot_str_format_data)
     STRING *output;
@@ -2122,12 +2147,11 @@ Parrot_str_to_num(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
             return PARROT_FLOATVAL_INF_NEGATIVE;
     }
 
-/* powl() could be used here, but it is an optional POSIX extension that
-   needs to be checked for at Configure-time.
-
-   See https://github.com/parrot/parrot/issues/451 for more details. */
-
+#if defined(PARROT_HAS_POWL) && !defined(__CYGWIN__)
+#  define POW powl
+#else
 #  define POW pow
+#endif
 
      if (d && d_is_safe) {
         f = mantissa + (1.0 * d / POW(10.0, d_length));
@@ -2245,7 +2269,7 @@ Parrot_str_to_encoded_cstring(PARROT_INTERP, ARGIN(const STRING *s),
     char   *p;
 
     if (STRING_IS_NULL(s))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Can't convert NULL string");
 
     if (s->encoding != enc) {
@@ -2881,7 +2905,7 @@ Parrot_str_upcase(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
 {
     ASSERT_ARGS(Parrot_str_upcase)
     if (STRING_IS_NULL(s))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Can't upcase NULL string");
     else {
         STRING * const res = STRING_upcase(interp, s);
@@ -2911,7 +2935,7 @@ Parrot_str_downcase(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
     ASSERT_ARGS(Parrot_str_downcase)
 
     if (STRING_IS_NULL(s))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Can't downcase NULL string");
     else {
         STRING * const res = STRING_downcase(interp, s);
@@ -2941,7 +2965,7 @@ Parrot_str_titlecase(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
     ASSERT_ARGS(Parrot_str_titlecase)
 
     if (STRING_IS_NULL(s))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Can't titlecase NULL string");
     else {
         STRING * const res = STRING_titlecase(interp, s);
@@ -2950,6 +2974,34 @@ Parrot_str_titlecase(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
     }
 }
 
+/*
+
+=item C<STRING * Parrot_str_foldcase(PARROT_INTERP, const STRING *s)>
+
+Returns a copy of the specified Parrot string case-folded. Non caseable
+characters are left unchanged. The encoding of the string may be modified.
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_CANNOT_RETURN_NULL
+PARROT_MALLOC
+STRING *
+Parrot_str_foldcase(PARROT_INTERP, ARGIN_NULLOK(const STRING *s))
+{
+    ASSERT_ARGS(Parrot_str_foldcase)
+
+    if (STRING_IS_NULL(s))
+        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+            "Can't foldcase NULL string");
+    else {
+        STRING * const res = STRING_foldcase(interp, s);
+        res->hashval = 0;
+        return res;
+    }
+}
 
 /*
 

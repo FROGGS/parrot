@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2014, Parrot Foundation.
+# Copyright (C) 2007-2015, Parrot Foundation.
 
 =pod
 
@@ -85,11 +85,11 @@ A couple of days in advance, announce the new release to
 C<parrot-dev@lists.parrot.org> and to the IRC channel C<#parrot>. Ask whether
 there are any showstopping bugs. Check-in again with the language project
 leads. It's also good to ask for updates to
-L<http://github.com/parrot/parrot/blob/master/ChangeLog>,
-L<http://github.com/parrot/parrot/blob/master/CREDITS>,
-L<http://github.com/parrot/parrot/blob/master/PLATFORMS>.
-L<http://github.com/parrot/parrot/blob/master/RESPONSIBLE_PARTIES>,
-L<http://github.com/parrot/parrot/blob/master/api.yaml>,
+L<ChangeLog|http://github.com/parrot/parrot/blob/master/ChangeLog>,
+L<CREDITS|http://github.com/parrot/parrot/blob/master/CREDITS>,
+L<PLATFORMS|http://github.com/parrot/parrot/blob/master/PLATFORMS>,
+L<RESPONSIBLE_PARTIES|http://github.com/parrot/parrot/blob/master/RESPONSIBLE_PARTIES>,
+L<api.yaml|http://github.com/parrot/parrot/blob/master/api.yaml>,
 and L<https://github.com/parrot/parrot/wiki/Languages>.
 
 =item 6
@@ -158,23 +158,18 @@ run C<make reconfig> to update the version in your config files.
 
 =item b.
 
-Update the version number, the date, and your name in L<http://github.com/parrot/parrot/blob/master/docs/parrothist.pod>.
+Update the version number, the date, and your name in L<docs/parrothist.pod|http://github.com/parrot/parrot/blob/master/docs/parrothist.pod>.
 
 =item c.
 
-Update this file
-(L<http://github.com/parrot/parrot/blob/master/docs/project/release_manager_guide.pod>)
+Update L<docs/project/release_manager_guide.pod|http://github.com/parrot/parrot/blob/master/docs/project/release_manager_guide.pod>
 to remove the pending release you're currently building.
 
 =back
 
 =item 2
 
-Run
-
-    perl tools/dev/new_changelog_skeleton.pl
-
-to update F<ChangeLog> with the new version number and a skeleton announcement.
+Update F<ChangeLog>.
 
 Add any other changes which have occurred since the last release. Hopefully,
 the committers are updating these files as they work. But, if not, then it's
@@ -184,9 +179,10 @@ day of the release. All commits since the last release can be see via:
 
 =item 3
 
-Update release-related information in F<tools/release/release.json>. You will
-use this later for the release announcements. There are a few, essential
-fields which must be updated at each release:
+Update release-related information in F<tools/release/release.json>.
+
+You will use this later for the release announcements. There are a few,
+essential fields which must be updated at each release:
 
 =over 4
 
@@ -252,9 +248,7 @@ Parrot versions to generate all native_pbc files.
 
 If F<PBC_COMPAT> was not updated and you got no updated native_pbc files,
 you need to update the native pbc headers with
-C<perl tools/dev/pbc_header.pl --update-fingerprint t/native_pbc/*.pbc>,
-so that the native_pbc tests will not be TODO'd, but skip
-unreadable old PBC files for big endian 8 bit platforms F<*_8_be.pbc>.
+C<perl tools/dev/pbc_header.pl --update-fingerprint t/native_pbc/*.pbc>.
 
 =item 8
 
@@ -493,14 +487,14 @@ to keep the main page fresh.
 To update both the C<parrot.github.com> and the relevant C<parrot-docsx> repositories,
 execute the following command:
 
-    perl tools/release/parrot_github_release.pl --docs=[/path/to/old/docs/]
+    perl tools/release/parrot_github_release.pl --docs=[/fullpath/to/old/docs/]
 
 Please note: To review the available options, use the C<-h | --help> option.
 In addition, you may also want to review the pod with,
 C<perldoc tools/release/parrot_github_release.pl>.
 
 For more information about the update process, I<see>
-L<http://github.com/parrot/parrot/blob/master/docs/project/release_parrot_github_guide.pod>.
+L<docs/project/release_parrot_github_guide.pod|http://github.com/parrot/parrot/blob/master/docs/project/release_parrot_github_guide.pod>.
 
 =head2 XI. Publicity
 
@@ -511,9 +505,8 @@ channels (and any others you can think of):
 
 =item 1
 
-Send a text email to C<parrot-dev>, C<parrot-users>, C<perl6-language>,
-C<perl6-announce>, etc. You should also include L<lwn.net> in
-this mailing; email to C<lwn> at that domain.
+Send a text email to C<parrot-dev>, C<parrot-users>, etc. You should also
+include L<lwn.net> in this mailing; email to C<lwn> at that domain.
 
 Also, notify Perl Weekly at C<szabgab@gmail.com> .
 
@@ -535,27 +528,25 @@ If not, ask someone to do this.
 
 =item 4
 
-Update the wiki frontpage at L<https://github.com/parrot/parrot/wiki>
-
-=item 5
-
 Update the Wikipedia entry at
 L<http://en.wikipedia.org/wiki/Parrot_virtual_machine>.
-
-=item 6
-
-Update the C2 wiki entry at L<http://c2.com/cgi/wiki?ParrotCode>.
 
 =back
 
 =head2 XII. Finish
 
+Run
+
+    perl tools/dev/new_changelog_skeleton.pl
+
+to prepare the new F<ChangeLog> with the new version number and a skeleton announcement.
+
 You're done! Help yourself to a beer, cola, or other delicious celebratory drink.
 
 =head1 SEE ALSO
 
-L<http://github.com/parrot/parrot/blob/master/README.pod>,
-L<http://github.com/parrot/parrot/blob/master/RESPONSIBLE_PARTIES>.
+L<README.pod|http://github.com/parrot/parrot/blob/master/README.pod>,
+L<RESPONSIBLE_PARTIES|http://github.com/parrot/parrot/blob/master/RESPONSIBLE_PARTIES>.
 
 =head1 APPENDIX 1 - UPCOMING RELEASES
 
@@ -564,7 +555,7 @@ across multiple release managers. Releases are scheduled for the 3rd Tuesday of
 each month.
 
 To learn more about our support policy, see
-L<http://github.com/parrot/parrot/blob/master/docs/project/support_policy.pod>.
+L<docs/project/support_policy.pod|http://github.com/parrot/parrot/blob/master/docs/project/support_policy.pod>.
 
 The calendar of releases is available at the C<comp.lang.parrot> Google
 calendar, visible at
@@ -572,9 +563,9 @@ L<http://www.google.com/calendar/render?cid=ldhctdamsgfg5a1cord52po9h8@group.cal
 
 Make sure that at least the next two releases are covered.
 
-    - Nov 18, 2014 -  6.10.0  - Util
-    - Dec 16, 2014 -  6.11.0  - rurban
-    - Jan 20, 2015 - *7.0.0   - 
+    - Mar 15, 2016 -  8.2.0   - Util
+    - Apr 19, 2016 -  8.3.0   - rurban
+    - May 17, 2016 -  8.4.0   - Util
 
 =cut
 

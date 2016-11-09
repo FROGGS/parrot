@@ -22,6 +22,7 @@ Parrot_ext_call, which creates a new interp, task and calls a new runloop.
 
 #include "parrot/oo_private.h"
 #include "pmc/pmc_class.h"
+#include "pmc/pmc_sub.h"
 
 /* HEADERIZER HFILE: none */
 /* HEADERIZER BEGIN: static */
@@ -177,7 +178,7 @@ get_attrib_index_keyed(PARROT_INTERP, ARGIN(PMC *self), ARGIN(PMC *key), ARGIN(S
     /* Build a string representing the fully qualified attribute name. */
     PMC    * const parent_class = Parrot_oo_get_class(interp, key);
     STRING * const fq_name      = Parrot_str_concat(interp,
-                                VTABLE_get_string(interp, parent_class), name);
+                                    VTABLE_get_string(interp, parent_class), name);
 
     /* Look up. */
     if (VTABLE_exists_keyed_str(interp, _class->attrib_index, fq_name))
@@ -293,8 +294,8 @@ Raises an exception; you can only instantiate objects from a class.
 
     VTABLE void init() :no_wb {
         UNUSED(SELF)
-        Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_INVALID_OPERATION,
-            "Object must be created by a class.");
+        Parrot_ex_throw_from_c_noargs(INTERP, EXCEPTION_INVALID_OPERATION,
+            "Object must be created by a class");
     }
 
 /*
@@ -311,8 +312,8 @@ Raises an exception; you can only instantiate objects from a class.
     VTABLE void init_pmc(PMC *from) :no_wb {
         UNUSED(SELF)
         UNUSED(from)
-        Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_INVALID_OPERATION,
-                "Object must be created by a class.");
+        Parrot_ex_throw_from_c_noargs(INTERP, EXCEPTION_INVALID_OPERATION,
+                "Object must be created by a class");
     }
 
 
@@ -519,8 +520,7 @@ Queries this object's class to find the method with the given name.
         Parrot_Object_attributes * const obj    = PARROT_OBJECT(SELF);
         Parrot_Class_attributes  * const _class = PARROT_CLASS(obj->_class);
 
-        PMC                             *method =
-                 find_cached(INTERP, obj->_class, name);
+        PMC *method = find_cached(INTERP, obj->_class, name);
 
         if (!PMC_IS_NULL(method))
             return method;
@@ -567,8 +567,8 @@ Queries this object's class to find the method with the given name.
                         break;
                 }
                 else
-                    Parrot_ex_throw_from_c_args(INTERP, NULL, -1,
-                        "Class %Ss inherits from alien parents.",
+                    Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_NO_CLASS,
+                        "Class %Ss inherits from alien parents",
                         class_info->name);
             }
 
@@ -828,10 +828,8 @@ Invokes the object (if this vtable function is overridden).
                 PMC * const call_sig =
                     Parrot_pcc_get_signature(INTERP, CURRENT_CONTEXT(INTERP));
 
-                if ((VTABLE_elements(INTERP, call_sig) == 0
-                ||   VTABLE_get_pmc_keyed_int(INTERP, call_sig, 0) != SELF))
-                    VTABLE_unshift_pmc(INTERP, call_sig, SELF);
-
+                /* Always called as :method, even if only :vtable. GH #1013 */
+                VTABLE_unshift_pmc(INTERP, call_sig, SELF);
                 return VTABLE_invoke(INTERP, meth, next);
             }
 

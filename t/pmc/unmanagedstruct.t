@@ -1,5 +1,5 @@
 #!./parrot
-# Copyright (C) 2006-2011, Parrot Foundation.
+# Copyright (C) 2006-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -17,6 +17,20 @@ Tests the UnManagedStruct PMC.
 
 .sub main :main
     .include 'test_more.pir'
+
+    .include 'iglobals.pasm'
+    .local pmc interp, config
+    interp = getinterp
+    config = interp[.IGLOBALS_CONFIG_HASH]
+    $S0 = config['ccflags']
+    set $S1, "-DSTRUCT_DEBUG"
+    $I1 = index $S0, $S1
+    if $I1 == -1 goto go_ahead
+
+    skip_all('does not work with --ccflags=-DSTRUCT_DEBUG')
+    finish()
+    exit 0
+go_ahead:
 
     plan(10)
 
@@ -66,7 +80,7 @@ OK:
     push_eh eh1
     $S0 = $P0[$P1]
 
-    ok(0, "no error thrown when trying to get key of unintialized struct")
+    ok(0, "no error thrown when trying to get key of uninitialized struct")
     goto finally1
 eh1:
     .get_results($P1)
@@ -76,7 +90,7 @@ finally1:
 
     push_eh eh2
     $P0[$P1] = "test"
-    ok(0, "no error thrown when trying to set key of unintialized struct")
+    ok(0, "no error thrown when trying to set key of uninitialized struct")
     goto finally2
 eh2:
     .get_results($P1)

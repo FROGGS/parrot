@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2008-2014, Parrot Foundation.
+Copyright (C) 2008-2016, Parrot Foundation.
 
 =head1 NAME
 
@@ -114,7 +114,7 @@ Free structures.
 =cut
 
 */
-    VTABLE void destroy() :no_wb {
+    VTABLE void destroy() {
         /* TODO: Make sure to free the buffers */
         Parrot_io_close(INTERP, SELF, 1);
     }
@@ -149,8 +149,9 @@ Returns whether the Socket is currently open.
 
 
     METHOD socket(INTVAL fam, INTVAL type, INTVAL proto) {
-        if (Parrot_io_socket(INTERP, SELF, fam, type, proto)) {
-            RETURN(PMC * SELF);
+        PMC *socket = Parrot_io_socket(INTERP, SELF, fam, type, proto);
+        if (socket) {
+            RETURN(PMC * socket);
         }
         RETURN(PMC * PMCNULL);
     }
@@ -192,8 +193,13 @@ family (integer). If no address family is given, it defaults to IPv4.
         if (!family)
             family = PIO_PF_INET;
 
-        array = Parrot_io_internal_getaddrinfo(INTERP, address, port, PIO_PROTO_TCP,
-                    family, 0);
+        if (family == PIO_PF_UNIX) {
+            array = Parrot_io_internal_getaddrinfo_unix(INTERP, address);
+        }
+        else {
+            array = Parrot_io_internal_getaddrinfo(INTERP, address, port,
+                    PIO_PROTO_TCP, family, 0);
+        }
 
         if (VTABLE_elements(interp, array))
             res = VTABLE_get_pmc_keyed_int(interp, array, 0);

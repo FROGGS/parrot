@@ -1,5 +1,5 @@
 #! perl
-# Copyright (C) 2007, Parrot Foundation.
+# Copyright (C) 2007,2014, Parrot Foundation.
 # auto/attributes-01.t
 
 use strict;
@@ -13,7 +13,7 @@ use Parrot::Configure::Step::Test;
 use Parrot::Configure::Test qw(
     test_step_constructor_and_description
 );
-use IO::CaptureOutput qw | capture |;
+use Parrot::Configure::Utils qw | capture |;
 
 my ($args, $step_list_ref) = process_options( {
     argv            => [ ],
@@ -32,10 +32,7 @@ my $step = test_step_constructor_and_description($conf);
 {
     my $rv;
     my $stdout;
-    capture(
-        sub { $rv = $step->runstep($conf); },
-        \$stdout,
-    );
+    capture( sub { $rv = $step->runstep($conf); } );
     ok( defined $rv, "runstep() returned defined value" );
     unlike($conf->data->get('ccflags'),
         qr/HASATTRIBUTE_NEVER_WORKS/,

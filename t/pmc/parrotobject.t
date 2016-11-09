@@ -1,5 +1,5 @@
 #!perl
-# Copyright (C) 2006-2008, Parrot Foundation.
+# Copyright (C) 2006-2014, Parrot Foundation.
 
 use strict;
 use warnings;
@@ -28,7 +28,7 @@ pir_error_output_like( <<'CODE', <<'OUT', 'new' );
     print "ok 1\n"
 .end
 CODE
-/Object must be created by a class./
+/Object must be created by a class/
 OUT
 
 # '
@@ -193,15 +193,15 @@ pir_output_is( <<'CODE', <<'OUT', 'Execution ends after returning from invoke' )
 .namespace ['Foo']
 
 .sub invoke :vtable
-say "you invoked me!"
-.return()
+  say "you invoked me!"
+  .return()
 .end
 
 .sub main :main
-$P0 = newclass "Foo"
-$P1 = new ['Foo']
-$P1($P1)   # pass the object it"self"
-say "got here"
+  $P0 = newclass "Foo"
+  $P1 = new ['Foo']
+  $P1()   # no explicit self
+  say "got here"
 .end
 CODE
 you invoked me!
@@ -211,22 +211,26 @@ OUT
 pir_output_is( <<'CODE', <<'OUT', 'params/returns from overridden invoke' );
 .namespace ['Foo']
 
-.sub invoke :vtable
+.sub invoke :method :vtable
   .param int a
-  print a
-  print "\n"
+  say self
+  say a
   inc a
   .return(a)
+.end
+
+.sub get_string :vtable
+    .return ("me")
 .end
 
 .sub main :main
   $P0 = newclass "Foo"
   $P1 = new ['Foo']
-  $I0 = $P1($P1, 2) # pass the object it"self"
-  print $I0
-  print "\n"
+  $I0 = $P1(2) # pass the object it"self"
+  say $I0
 .end
 CODE
+me
 2
 3
 OUT

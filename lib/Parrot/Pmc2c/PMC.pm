@@ -73,7 +73,7 @@ sub dump {
     # gen_parent_reverse_lookup_info( $self, $pmcs, $vtable_dump );
     my $filename = $self->filename('.dump');
     Storable::nstore( $self, $filename );
-    add_to_generated( $filename, "[devel]", "src") unless $self->is_dynamic;
+    # add_to_generated( $filename, "[devel]", "src") unless $self->is_dynamic;
 }
 
 # methods
@@ -640,20 +640,6 @@ sub hdecls {
         next if $method->is_vtable;
         $hout .= $method->generate_headers($self);
     }
-
-    my $export = $self->is_dynamic ? 'PARROT_DYNEXT_EXPORT ' : '';
-
-    # class init decl
-    $hout .= "${export}void    Parrot_${name}_class_init(PARROT_INTERP, int, int);\n";
-
-    $export = $self->is_dynamic ? 'PARROT_DYNEXT_EXPORT ' : 'PARROT_EXPORT ';
-
-    #$hout .= "${export}VTABLE* Parrot_${name}_update_vtable(ARGMOD(VTABLE*));\n"
-    #    unless $name eq 'default';
-    #$hout .= "${export}VTABLE* Parrot_${name}_get_vtable(PARROT_INTERP);\n";
-
-    $hout .= "${export}VTABLE* Parrot_${name}_get_vtable_pointer(PARROT_INTERP);\n"
-        if ($self->is_dynamic);
 
     $self->{hdecls} .= $hout;
     return $self->{hdecls};
@@ -1770,7 +1756,7 @@ EOA
 
         if ($isfuncptr == 1) {
             $decl .= <<"EOA";
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION, \\
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION, \\
                 "Attributes of type '$origtype' cannot be " \\
                 "subclassed from a high-level PMC."); \\
 EOA
@@ -1806,7 +1792,7 @@ EOA
         else {
             $inherit = 0;
             $decl .= <<"EOA";
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION, \\
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION, \\
                 "Attributes of type '$attrtype' cannot be " \\
                 "subclassed from a high-level PMC."); \\
 EOA
@@ -1825,7 +1811,7 @@ EOA
 
         if ($isfuncptr == 1) {
             $decl .= <<"EOA";
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION, \\
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION, \\
                 "Attributes of type '$origtype' cannot be " \\
                 "subclassed from a high-level PMC."); \\
 EOA
@@ -1862,7 +1848,7 @@ EOA
 
         else {
             $decl .= <<"EOA";
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION, \\
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION, \\
                 "Attributes of type '$attrtype' cannot be " \\
                 "subclassed from a high-level PMC."); \\
 EOA

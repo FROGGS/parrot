@@ -110,9 +110,7 @@ remainder - sorry.
     key_name = event.'event_keyname'()
 
     .local string key_method_name
-    key_method_name = 'key_down_'
-
-    concat key_method_name, key_name
+    key_method_name = concat 'key_down_', key_name
 
     .local int can_handle
     can can_handle, self, key_method_name
@@ -145,9 +143,7 @@ want to override the C<key_up_*> methods instead.
     key_name = event.'event_keyname'()
 
     .local string key_method_name
-    key_method_name = 'key_up_'
-
-    concat key_method_name, key_name
+    key_method_name = concat 'key_up_', key_name
 
     .local int can_handle
     can can_handle, self, key_method_name
@@ -371,8 +367,7 @@ At the very least, you should override C<quit()>.
 
 =head1 AUTHOR
 
-Written and maintained by chromatic, E<lt>chromatic at wgz dot orgE<gt>.
-Designed by Allison Randal.  Please send patches, feedback, and suggestions to
+Designed by Allison Randal. Please send patches, feedback, and suggestions to
 the Perl 6 Internals mailing list.
 
 =head1 COPYRIGHT

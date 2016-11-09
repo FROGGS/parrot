@@ -387,7 +387,7 @@ imcc_globals_destroy(SHIM_INTERP, SHIM(int ex), ARGMOD(void *param))
     ASSERT_ARGS(imcc_globals_destroy)
     imc_info_t * const imcc = (imc_info_t*)param;
 
-    /* This is an allowed condition? See TT #629 */
+    /* In an exit within :immediate there will no globals. See TT #629 */
     if (imcc->globals) {
         code_segment_t *cs = imcc->globals->cs;
 
@@ -408,7 +408,6 @@ imcc_globals_destroy(SHIM_INTERP, SHIM(int ex), ARGMOD(void *param))
         }
         imcc->globals->cs = NULL;
     }
-
 }
 
 
@@ -704,6 +703,13 @@ get_code_size(ARGMOD(imc_info_t * imcc), ARGIN(const IMC_Unit *unit),
 
                 if (ins->symregs[1]->usage & U_FIXUP)
                     store_fixup(imcc, ins->symregs[1], code_size, 2);
+                if (ins->symregs[1]->color < 0)
+                    IMCC_debug(imcc, DEBUG_PBC_FIXUP, "Warning: PMC %s color %d\n",
+                               ins->symregs[1]->name, ins->symregs[1]->color);
+                /*
+                    Parrot_ex_throw_from_c_noargs(imcc->interp, EXCEPTION_UNEXPECTED_NULL,
+                        "PMC is not defined");
+                */
             }
         }
         code_size += opsize;
@@ -933,8 +939,12 @@ fixup_globals(ARGMOD(imc_info_t * imcc))
                     s1 = NULL;
                 else if (fixup->usage & U_SUBID_LOOKUP) {
                     subid_lookup = 1;
-                    /* s1 = find_sub_by_subid(interp, fixup->name, &pc); */
                     s1 = find_sub_by_subid(imcc, fixup->name, s, &pc);
+                    /* this is changed to find_sub_not_null at run-time
+                    if (!s1 || s1->pmc_const == -1)
+                        IMCC_fataly(imcc, EXCEPTION_INVALID_OPERATION,
+                                "Sub '%s' not found\n", fixup->name);
+                    */
                 }
                 else if (fixup->usage & U_LEXINFO_LOOKUP) {
                     s1 = find_sub_by_subid(imcc, fixup->name, s, &pc);
@@ -1061,22 +1071,33 @@ IMCC_string_from_reg(ARGMOD(imc_info_t * imcc), ARGIN(const SymReg *r))
         len = p - buf - 1;
         if (len > MAX_NAME)
             len = MAX_NAME;
+        if (len < 2)
+            IMCC_fatal(imcc, 1, "string_from_reg: "
+                       "invalid encoding '%s'\n", buf);
         memcpy(encoding_name, buf, len);
         encoding_name[len] = '\0';
 
         return Parrot_str_unescape(imcc->interp, p + 1, '"', encoding_name);
     }
     else if (*buf == '"') {
+        size_t len = strlen(buf);
+        if (len < 2)
+            IMCC_fatal(imcc, 1, "string_from_reg: "
+                       "invalid name '%s'\n", buf);
         buf++;
         if (r->usage & U_LEXICAL) /* GH 1095 quirks, treat as single-quote */
-            return Parrot_str_new_init(imcc->interp, buf, strlen(buf) - 1,
+            return Parrot_str_new_init(imcc->interp, buf, len - 2,
                        Parrot_ascii_encoding_ptr, PObj_constant_FLAG);
         else
             return Parrot_str_unescape(imcc->interp, buf, '"', NULL);
     }
     else if (*buf == '\'') {
+        size_t len = strlen(buf);
+        if (len < 2)
+            IMCC_fatal(imcc, 1, "string_from_reg: "
+                       "invalid name '%s'\n", buf);
         buf++;
-        return Parrot_str_new_init(imcc->interp, buf, strlen(buf) - 1,
+        return Parrot_str_new_init(imcc->interp, buf, len - 2,
                 Parrot_ascii_encoding_ptr, PObj_constant_FLAG);
     }
 
@@ -1158,7 +1179,7 @@ add_const_str(ARGMOD(imc_info_t * imcc), ARGIN(STRING *s),
 {
     ASSERT_ARGS(add_const_str)
     PackFile_ConstTable * const ct = bc->const_table;
-    const int i = PackFile_ConstTable_rlookup_str(imcc->interp, ct, s);
+    const int i = Parrot_pf_ConstTable_rlookup_str(imcc->interp, ct, s);
 
     if (i >= 0)
         return i;
@@ -1915,7 +1936,7 @@ init_fixedintegerarray_from_string(ARGMOD(imc_info_t * imcc), ARGIN(PMC *p),
     int     base;
 
     if (STRING_max_bytes_per_codepoint(s) != 1)
-        Parrot_ex_throw_from_c_args(imcc->interp, NULL, EXCEPTION_INVALID_ENCODING,
+        Parrot_ex_throw_from_c_noargs(imcc->interp, EXCEPTION_INVALID_ENCODING,
             "unhandled string encoding in FixedIntegerArray initialization");
 
     l = Parrot_str_byte_length(imcc->interp, s);
@@ -1958,7 +1979,7 @@ init_fixedintegerarray_from_string(ARGMOD(imc_info_t * imcc), ARGIN(PMC *p),
                 ++chr;
             }
             else {
-                Parrot_ex_throw_from_c_args(imcc->interp, NULL,
+                Parrot_ex_throw_from_c_noargs(imcc->interp,
                         EXCEPTION_INVALID_STRING_REPRESENTATION,
                         "expected ',' in FixedIntegerArray initialization");
             }
@@ -2004,7 +2025,7 @@ init_fixedintegerarray_from_string(ARGMOD(imc_info_t * imcc), ARGIN(PMC *p),
             /* Hold onto the , for the test at the start of the loop */
             break;
           default:
-            Parrot_ex_throw_from_c_args(imcc->interp, NULL,
+            Parrot_ex_throw_from_c_noargs(imcc->interp,
                     EXCEPTION_INVALID_STRING_REPRESENTATION,
                     "invalid number in FixedIntegerArray initialization");
         }
@@ -2064,7 +2085,7 @@ make_pmc_const(ARGMOD(imc_info_t * imcc), ARGMOD(SymReg *r))
         init_fixedintegerarray_from_string(imcc, p, s);
         break;
       default:
-        Parrot_ex_throw_from_c_args(imcc->interp, NULL, EXCEPTION_INVALID_OPERATION,
+        Parrot_ex_throw_from_c_noargs(imcc->interp, EXCEPTION_INVALID_OPERATION,
             "Can't generate PMC constant for this type.");
     }
 
@@ -2237,9 +2258,10 @@ e_pbc_end_sub(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(IMC_Unit *unit
         return;
 
     /*
-     * if the sub was marked IMMEDIATE, we run it now
+     * if the sub was marked IMMEDIATE, we run it now.
      * This is *dangerous*: all possible global state can be messed
-     * up, e.g. when that sub starts loading bytecode
+     * up, e.g. when that sub starts loading bytecode.
+     * Any pmc color -1 will be invalid as those fixups will not be run. #1024
      */
 
     /* we run only PCC subs */
@@ -2261,7 +2283,7 @@ e_pbc_end_sub(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(IMC_Unit *unit
         IMCC_debug(imcc, DEBUG_PBC, "immediate sub '%s'", ins->symregs[0]->name);
         /* TODO: Don't use this function, it is deprecated (TT #2140). We need
            to find a better mechanism to do this. */
-        PackFile_fixup_subs(imcc->interp, PBC_IMMEDIATE, NULL);
+        Parrot_pf_fixup_subs(imcc->interp, PBC_IMMEDIATE, NULL);
 
         imcc->globals  = g;
         memmove(&imcc->ghash, &ghash, sizeof (SymHash));
@@ -2393,14 +2415,14 @@ e_pbc_emit(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(const IMC_Unit *u
 
         interp_code->base.size = old_size + code_size;
 
-        imcc->pc   = (opcode_t *)interp_code->base.data + old_size;
+        imcc->pc   = interp_code->base.data + old_size;
         imcc->npc  = 0;
 
         /* FIXME length and multiple subs */
         seg_size = (size_t)imcc->ins_line + ins_size + 1;
-        imcc->debug_seg = Parrot_new_debug_seg(imcc->interp, interp_code, seg_size);
+        imcc->debug_seg = Parrot_pf_new_debug_segment(imcc->interp, interp_code, seg_size);
 
-        Parrot_debug_add_mapping(imcc->interp, imcc->debug_seg, old_size, unit->file);
+        Parrot_pf_debug_add_mapping(imcc->interp, imcc->debug_seg, old_size, unit->file);
 
         /* if item is a PCC_SUB entry then store it constants */
         if (ins->symregs[0] && ins->symregs[0]->pcc_sub) {
@@ -2443,7 +2465,7 @@ e_pbc_emit(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(const IMC_Unit *u
           default:
             IMCC_fatal(imcc, 1, "e_pbc_emit:invalid type for annotation value\n");
         }
-        PackFile_Annotations_add_entry(imcc->interp, interp_code->annotations,
+        Parrot_pf_annotations_add_entry(imcc->interp, interp_code->annotations,
                     imcc->pc - interp_code->base.data,
                     ins->symregs[0]->color, annotation_type, ins->symregs[1]->color);
     }
@@ -2510,7 +2532,7 @@ e_pbc_emit(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(const IMC_Unit *u
                 if (r->type & VT_CONSTP)
                     r = r->reg;
 
-                *(imcc->pc)++ = (opcode_t) r->color;
+                *(imcc->pc)++ = r->color;
                 IMCC_debug(imcc, DEBUG_PBC, " %d", r->color);
                 break;
               case PARROT_ARG_KC:
@@ -2542,7 +2564,7 @@ e_pbc_emit(ARGMOD(imc_info_t * imcc), SHIM(void *param), ARGIN(const IMC_Unit *u
                 r = ins->symregs[i];
                 if (r->type & VT_CONSTP)
                     r = r->reg;
-                *(imcc->pc)++ = (opcode_t) r->color;
+                *(imcc->pc)++ = r->color;
                 IMCC_debug(imcc, DEBUG_PBC, " %d", r->color);
             }
         }

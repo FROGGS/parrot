@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2014, Parrot Foundation.
+# Copyright (C) 2001-2015, Parrot Foundation.
 
 package Parrot::Configure::Messages;
 
@@ -8,6 +8,7 @@ use base qw( Exporter );
 our @EXPORT_OK = qw(
     print_introduction
     print_conclusion
+    warn_experimental
 );
 
 ################### SUBROUTINES ###################
@@ -16,7 +17,7 @@ sub print_introduction {
     my $parrot_version = shift;
     print <<"END";
 Parrot Version $parrot_version Configure 2.0
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 Hello, I'm Configure. My job is to poke and prod your system to figure out
 how to build Parrot. The process is completely automated, unless you passed in
@@ -27,6 +28,28 @@ Since you're running this program, you obviously have Perl 5--I'll be pulling
 some defaults from its configuration.
 END
     return 1;
+}
+
+sub warn_experimental {
+    my ($conf, $args) = @_;
+    # intval long and 'long long' is fine. just shorter than PTR_SIZE will not work.
+    # Note that we die in auto::sizes, so this warning might not be needed.
+    my $intval =  $args->{intval};
+    print <<"END" if $args->{intval} and $intval !~ /^long( long)?( int)?$/;
+
+WARNING: --intval=$args->{intval} is experimental and might not work.
+See https://github.com/parrot/parrot/issues/1145
+END
+    print <<"END" if $args->{floatval} and $args->{floatval} ne 'double';
+
+WARNING: --floatval=$args->{floatval} is experimental and will not work.
+See https://github.com/parrot/parrot/issues/828
+END
+    print <<"END" if $args->{gc} and $args->{gc} ne 'gms';
+
+WARNING: --gc=$args->{gc} is experimental.
+See https://github.com/parrot/parrot/labels/Component-GC
+END
 }
 
 sub print_conclusion {

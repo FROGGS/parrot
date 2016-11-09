@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -100,7 +100,7 @@ debugger_or_interp(PARROT_INTERP)
 {
     ASSERT_ARGS(debugger_or_interp)
 
-    return interp->pdb && interp->pdb->debugger
+    return interp && interp->pdb && interp->pdb->debugger
             ? interp->pdb->debugger
             : interp;
 }
@@ -190,22 +190,13 @@ trace_pmc_flags_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
     if (!pmc || PMC_IS_NULL(pmc)) {
         return;
     }
-    if (debugger == interp)
-        fprintf(stderr, " ( ");
-    else
-        Parrot_io_eprintf(debugger, " ( ");
+    EPRINTF("( ");
     for (i=0; i < sizeof (flags_names) / sizeof (flags_names[0]); i++) {
         if (flags & flags_names[i].flag) {
-            if (debugger == interp)
-                fprintf(stderr, "%s ", flags_names[i].name);
-            else
-                Parrot_io_eprintf(debugger, "%s ", flags_names[i].name);
+            EPRINTF_1("%s ", flags_names[i].name);
         }
     }
-    if (debugger == interp)
-        fprintf(stderr, ")");
-    else
-        Parrot_io_eprintf(debugger, ")");
+    EPRINTF(")");
 }
 
 /*
@@ -233,7 +224,7 @@ trace_pmc_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
         return;
     }
     if (PObj_on_free_list_TEST(pmc)) {
-        EPRINTF("**************** PMC is on free list *****\n");
+        EPRINTF_1("**************** PMC(%p) is on free list *****\n", pmc);
     }
     if (!pmc->vtable) {
         EPRINTF("<!!no vtable!!>");
@@ -250,7 +241,7 @@ trace_pmc_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
         }
         else {
             STRING * const escaped = Parrot_str_escape_truncate(interp, s, 20);
-            if (escaped) {
+            if (escaped && escaped->strstart) {
                 EPRINTF_2("String=PMC(%p Str:\"%s\")", pmc, escaped->strstart);
             }
             else {
@@ -293,13 +284,30 @@ trace_pmc_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
         Parrot_Sub_attributes *sub;
         PMC_get_sub(interp, pmc, sub);
         EPRINTF_3("Sub(%s pc:"SIZE_FMT")=PMC(%p)",
-                  sub->name->strstart ? sub->name->strstart : "", sub->start_offs, pmc);
+                  (sub->name && sub->name->strstart) ? sub->name->strstart : "",
+                  sub->start_offs, pmc);
     }
     else if (pmc->vtable->base_type == enum_class_Coroutine) {
         Parrot_Sub_attributes *sub;
         PMC_get_sub(interp, pmc, sub);
         EPRINTF_3("Coroutine(%s pc:"SIZE_FMT")=PMC(%p)",
-                  sub->name->strstart ? sub->name->strstart : "", sub->start_offs, pmc);
+                  (sub->name && sub->name->strstart) ? sub->name->strstart : "",
+                  sub->start_offs, pmc);
+    }
+    else if (pmc->vtable->base_type == enum_class_FixedBooleanArray
+          || pmc->vtable->base_type == enum_class_FixedFloatArray
+          || pmc->vtable->base_type == enum_class_FixedIntegerArray
+          || pmc->vtable->base_type == enum_class_FixedPMCArray
+          || pmc->vtable->base_type == enum_class_FixedStringArray
+          || pmc->vtable->base_type == enum_class_ResizableBooleanArray
+          || pmc->vtable->base_type == enum_class_ResizableFloatArray
+          || pmc->vtable->base_type == enum_class_ResizableIntegerArray
+          || pmc->vtable->base_type == enum_class_ResizablePMCArray
+          || pmc->vtable->base_type == enum_class_ResizableStringArray
+          || pmc->vtable->base_type == enum_class_MappedByteArray) {
+        STRING * const name = VTABLE_name(interp, pmc);
+        EPRINTF_3("%s("INTVAL_FMT")=PMC(%p)",
+                  name->strstart, VTABLE_elements(interp, pmc), pmc);
     }
     else if (PObj_is_object_TEST(pmc)) {
         STRING * const s = VTABLE_get_string(interp, VTABLE_get_class(interp, pmc));
@@ -307,7 +315,7 @@ trace_pmc_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
     }
     else {
         STRING * const name = VTABLE_name(interp, pmc);
-        EPRINTF_2("%s=PMC(%p)", name->strstart, pmc);
+        EPRINTF_2("%s=PMC(%p)", name->strstart ? name->strstart : "", pmc);
     }
     if (Interp_trace_TEST(interp, PARROT_TRACE_OPS_PMC_FLAG))
         trace_pmc_flags_dump(interp, pmc);
@@ -315,7 +323,7 @@ trace_pmc_dump(PARROT_INTERP, ARGIN_NULLOK(PMC *pmc))
 
 /*
 
-=item C<int trace_key_dump(PARROT_INTERP, PMC *key)>
+=item C<int trace_key_dump(PARROT_INTERP, const PMC *key)>
 
 Prints a key to C<stderr>, returns the length of the output.
 
@@ -324,22 +332,22 @@ Prints a key to C<stderr>, returns the length of the output.
 */
 
 int
-trace_key_dump(PARROT_INTERP, ARGIN(PMC *key))
+trace_key_dump(PARROT_INTERP, ARGIN(const PMC *key))
 {
     ASSERT_ARGS(trace_key_dump)
     Interp * const debugger = debugger_or_interp(interp);
 
-    int len = Parrot_io_eprintf(debugger, "[");
+    int len = Parrot_io_eprintf(debugger, "# [");
 
     while (key) {
         switch (PObj_get_FLAGS(key) & KEY_type_FLAGS) {
           case KEY_integer_FLAG:
               len += Parrot_io_eprintf(debugger, "%vi",
-                 VTABLE_get_integer(interp, key));
+                  VTABLE_get_integer(interp, (PMC *)key));
             break;
           case KEY_string_FLAG:
             {
-            const STRING * const s = Parrot_key_string(interp, key);
+            const STRING * const s = Parrot_key_string(interp, (PMC *)key);
             STRING * const escaped = Parrot_str_escape_truncate(interp, s, 20);
 
             if (escaped)
@@ -350,13 +358,13 @@ trace_key_dump(PARROT_INTERP, ARGIN(PMC *key))
             break;
           case KEY_integer_FLAG|KEY_register_FLAG:
               len += Parrot_io_eprintf(debugger, "I%vd=%vd",
-                  VTABLE_get_integer(interp, key),
-                    REG_INT(interp, VTABLE_get_integer(interp, key)));
+                  VTABLE_get_integer(interp, (PMC *)key),
+                    REG_INT(interp, VTABLE_get_integer(interp, (PMC *)key)));
             break;
           case KEY_string_FLAG|KEY_register_FLAG:
             {
-            const UINTVAL keynum = (UINTVAL)VTABLE_get_integer(interp, key);
-            if (keynum < Parrot_pcc_get_regs_used(interp, CURRENT_CONTEXT(interp), REGNO_STR)) {
+            const UINTVAL keynum = (UINTVAL)VTABLE_get_integer(interp, (PMC *)key);
+            if (keynum < PCC_GET_REGS_USED(CURRENT_CONTEXT(interp), REGNO_STR)) {
                 const STRING * const s = REG_STR(interp, keynum);
                 STRING * const escaped = Parrot_str_escape_truncate(interp, s, 20);
                 if (escaped)
@@ -371,9 +379,9 @@ trace_key_dump(PARROT_INTERP, ARGIN(PMC *key))
             break;
           case KEY_pmc_FLAG|KEY_register_FLAG:
               len += Parrot_io_eprintf(debugger, "P%vd=",
-                  VTABLE_get_integer(interp, key));
+                  VTABLE_get_integer(interp, (PMC *)key));
               trace_pmc_dump(debugger, REG_PMC(interp,
-                  VTABLE_get_integer(interp, key)));
+                  VTABLE_get_integer(interp, (PMC *)key)));
             break;
           default:
             len += Parrot_io_eprintf(debugger, "??");
@@ -382,7 +390,7 @@ trace_key_dump(PARROT_INTERP, ARGIN(PMC *key))
         }
 
         if (key) {
-            key = VTABLE_shift_pmc(interp, key);
+            key = VTABLE_shift_pmc(interp, (PMC *)key);
             if (key)
                 len += Parrot_io_eprintf(debugger, ";");
         }
@@ -392,6 +400,45 @@ trace_key_dump(PARROT_INTERP, ARGIN(PMC *key))
     return len;
 }
 
+/*
+
+=item C<void trace_str_dump(PARROT_INTERP, const STRING *str)>
+
+Prints a STRING to C<stderr>.
+
+=cut
+
+*/
+
+void
+trace_str_dump(PARROT_INTERP, ARGIN_NULLOK(const STRING *str))
+{
+    ASSERT_ARGS(trace_str_dump)
+    Interp * const debugger = debugger_or_interp(interp);
+    STRING * escaped;
+
+    if (!str) {
+        EPRINTF("(null)");
+        return;
+    }
+    if (!str->strstart) {
+        EPRINTF_1("%p \"\"", str);
+        return;
+    }
+    escaped = Parrot_str_escape_truncate(interp, str, 20);
+    if (escaped) {
+        if (str->encoding == Parrot_ascii_encoding_ptr
+         || str->encoding == Parrot_latin1_encoding_ptr) {
+            EPRINTF_2("%p \"%s\"", str, escaped->strstart);
+        }
+        else {
+            EPRINTF_3("%p %s:\"%s\"", str, str->encoding->name, escaped->strstart);
+        }
+    }
+    else {
+        EPRINTF_1("%p \"\"", str);
+    }
+}
 
 /*
 
@@ -433,7 +480,7 @@ trace_op_dump(PARROT_INTERP,
         sig = interp->code->const_table->pmc.constants[pc[1]];
 
         if (!sig)
-            Parrot_ex_throw_from_c_args(interp, NULL, 1,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
                 "NULL sig PMC detected in trace_op_dump");
 
         var_args = VTABLE_elements(interp, sig);
@@ -451,7 +498,7 @@ trace_op_dump(PARROT_INTERP,
                 type = info->types[i - 1];
             else {
                 if (PMC_IS_NULL(sig))
-                    Parrot_ex_throw_from_c_args(interp, NULL, 1,
+                    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
                         "NULL sig PMC detected in trace_op_dump");
 
                 type = VTABLE_get_integer_keyed_int(interp, sig, i - 2) &
@@ -525,7 +572,7 @@ trace_op_dump(PARROT_INTERP,
                 more = 1;
                 break;
               default:
-                Parrot_ex_throw_from_c_args(interp, NULL, 1,
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_NULL_REG_ACCESS,
                         "unhandled type in trace");
                 break;
             }
@@ -537,7 +584,7 @@ trace_op_dump(PARROT_INTERP,
         if (len < ARGS_COLUMN)  {
             STRING * const fill = Parrot_str_repeat(debugger,
                     Parrot_str_new_constant(debugger, " "), ARGS_COLUMN - len);
-            Parrot_io_putps(debugger, Parrot_io_STDERR(debugger), fill);
+            Parrot_io_write_s(debugger, Parrot_io_STDERR(debugger), fill);
         }
         else
             Parrot_io_eprintf(debugger, "\t");
@@ -594,7 +641,7 @@ trace_op_dump(PARROT_INTERP,
 done:
 
     if (interp->code->annotations) {
-        PMC * const annot = PackFile_Annotations_lookup(interp,
+        PMC * const annot = Parrot_pf_annotations_lookup(interp,
                 interp->code->annotations, pc - code_start + 1, NULL);
 
         if (!PMC_IS_NULL(annot)) {

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2010-2014, Parrot Foundation.
+Copyright (C) 2010-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -24,9 +24,9 @@ typedef void (*compact_f) (Interp *, GC_Statistics *stats, Variable_Size_Pool *)
 
 #define POOL_SIZE (65536 * 2)
 
-/* show allocated blocks on stderr */
+/* show allocated blocks on stderr. Replaced by --ccflags=-DMEMORY_DEBUG and -D201 */
 #define RESOURCE_DEBUG 0
-#define RESOURCE_DEBUG_SIZE 1000000
+#define RESOURCE_DEBUG_SIZE 10000
 
 #define RECLAMATION_FACTOR 0.20
 #define WE_WANT_EVER_GROWING_ALLOCATIONS 0
@@ -36,6 +36,7 @@ typedef void (*compact_f) (Interp *, GC_Statistics *stats, Variable_Size_Pool *)
 /* HEADERIZER BEGIN: static */
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 
+PARROT_INLINE
 PARROT_CANNOT_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 static char * aligned_mem(
@@ -126,9 +127,10 @@ static Variable_Size_Pool * new_memory_pool(
     size_t min_block,
     NULLOK(compact_f compact));
 
-PARROT_CANNOT_RETURN_NULL
-static UINTVAL pad_pool_size(ARGIN(const Variable_Size_Pool *pool))
-        __attribute__nonnull__(1);
+static UINTVAL pad_pool_size(PARROT_INTERP,
+    ARGIN(const Variable_Size_Pool *pool))
+        __attribute__nonnull__(1)
+        __attribute__nonnull__(2);
 
 #define ASSERT_ARGS_aligned_mem __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(buffer_unused) \
@@ -169,7 +171,8 @@ static UINTVAL pad_pool_size(ARGIN(const Variable_Size_Pool *pool))
     , PARROT_ASSERT_ARG(old_buf))
 #define ASSERT_ARGS_new_memory_pool __attribute__unused__ int _ASSERT_ARGS_CHECK = (0)
 #define ASSERT_ARGS_pad_pool_size __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
-       PARROT_ASSERT_ARG(pool))
+       PARROT_ASSERT_ARG(interp) \
+    , PARROT_ASSERT_ARG(pool))
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 /* HEADERIZER END: static */
 
@@ -549,10 +552,9 @@ alloc_new_block(PARROT_INTERP, ARGMOD(GC_Statistics *stats),
 
     const size_t alloc_size = (size > pool->minimum_block_size)
             ? size : pool->minimum_block_size;
-
-#if RESOURCE_DEBUG
-    fprintf(stderr, "new_block (%s) size %u -> %u\n",
-        why, size, alloc_size);
+#ifndef NDEBUG
+    MEMORY_DEBUG_DETAIL_3("new_block (%s) size %u -> %u\n",
+                          why, size, alloc_size);
 #else
     UNUSED(why)
 #endif
@@ -630,7 +632,7 @@ mem_allocate(PARROT_INTERP,
     /* If not enough room, try to find some */
     if (pool->top_block->free < size) {
         /* Run a GC if needed */
-        Parrot_gc_maybe_mark_and_sweep(interp, GC_trace_stack_FLAG);
+        interp->gc_sys->maybe_gc_mark(interp, GC_trace_stack_FLAG);
 
         if (pool->top_block->free < size) {
             if (pool->minimum_block_size < 65536 * 16)
@@ -669,6 +671,7 @@ memory alignment.
 
 */
 
+PARROT_INLINE
 PARROT_CANNOT_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 static char *
@@ -695,7 +698,8 @@ string C<"???">.
 
 */
 
-#if RESOURCE_DEBUG
+#ifndef NDEBUG
+
 PARROT_CANNOT_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 static const char *
@@ -707,8 +711,8 @@ buffer_location(PARROT_INTERP, ARGIN(const Parrot_Buffer *b))
     UINTVAL i;
 
     for (i = 0; i < ctx->n_regs_used[REGNO_STR]; ++i) {
-        PObj * const obj = (PObj *)Parrot_pcc_get_STRING_reg(interp, ctx, i);
-        if ((PObj *)obj == b) {
+        PObj * const obj = (PObj *)Parrot_pcc_get_STRING_reg(interp, (PMC*)ctx, i);
+        if ((PObj *)obj == (PObj *)b) {
             sprintf(reg, "S%d", (int)i);
             return reg;
         }
@@ -765,20 +769,20 @@ compact_pool(PARROT_INTERP,
     Memory_Block *new_block;
 
     /* Bail if we're blocked */
-    if (Parrot_is_blocked_GC_sweep(interp))
+    if (Parrot_is_blocked_GC_sweep(interp) || Parrot_is_blocked_GC_move(interp))
         return;
 
-    Parrot_block_GC_sweep(interp);
+    Parrot_block_GC_move(interp);
 
     /* We're collecting */
     ++stats->gc_collect_runs;
 
     /* Snag a block big enough for everything */
-    total_size = pad_pool_size(pool);
+    total_size = pad_pool_size(interp, pool);
 
     if (total_size == 0) {
         free_old_mem_blocks(stats, pool, pool->top_block, total_size);
-        Parrot_unblock_GC_sweep(interp);
+        Parrot_unblock_GC_move(interp);
         return;
     }
 
@@ -799,8 +803,7 @@ compact_pool(PARROT_INTERP,
     stats->memory_used      += new_size;
 
     free_old_mem_blocks(stats, pool, new_block, total_size);
-
-    Parrot_unblock_GC_sweep(interp);
+    Parrot_unblock_GC_move(interp);
 }
 
 /*
@@ -808,7 +811,7 @@ compact_pool(PARROT_INTERP,
 =item C<static void move_buffer_callback(PARROT_INTERP, Parrot_Buffer *b, void
 *data)>
 
-Callback for live STRING/Buffer for compating.
+Callback for live STRING/Buffer for compacting.
 
 =cut
 
@@ -822,15 +825,19 @@ move_buffer_callback(PARROT_INTERP, ARGIN(Parrot_Buffer *b), ARGIN(void *data))
     if (Buffer_buflen(b) && PObj_is_movable_TESTALL(b)) {
         Memory_Block * const old_block = Buffer_pool(b);
 
-        if (!is_block_almost_full(old_block))
+        if (!is_block_almost_full(old_block)) {
+            MEMORY_DEBUG_DETAIL_3("Move buffer %2u %p => %p\n",
+                                  (unsigned)Buffer_buflen(b), old_block, new_block);
             move_one_buffer(interp, new_block, b);
+        }
     }
 
 }
 
 /*
 
-=item C<static UINTVAL pad_pool_size(const Variable_Size_Pool *pool)>
+=item C<static UINTVAL pad_pool_size(PARROT_INTERP, const Variable_Size_Pool
+*pool)>
 
 Calculate the size of the new pool. The currently used size equals the total
 size minus the reclaimable size. Add a minimum block to the current amount, so
@@ -858,15 +865,14 @@ problem easily.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
 static UINTVAL
-pad_pool_size(ARGIN(const Variable_Size_Pool *pool))
+pad_pool_size(PARROT_INTERP, ARGIN(const Variable_Size_Pool *pool))
 {
     ASSERT_ARGS(pad_pool_size)
     Memory_Block *cur_block = pool->top_block->prev;
 
     UINTVAL total_size   = 0;
-#if RESOURCE_DEBUG
+#ifndef NDEBUG
     size_t  total_blocks = 1;
 #endif
 
@@ -874,7 +880,7 @@ pad_pool_size(ARGIN(const Variable_Size_Pool *pool))
         if (!is_block_almost_full(cur_block))
             total_size += cur_block->size - cur_block->freed - cur_block->free;
         cur_block   = cur_block->prev;
-#if RESOURCE_DEBUG
+#ifndef NDEBUG
         ++total_blocks;
 #endif
     }
@@ -891,8 +897,8 @@ pad_pool_size(ARGIN(const Variable_Size_Pool *pool))
     total_size += pool->minimum_block_size;
 #endif
 
-#if RESOURCE_DEBUG
-    fprintf(stderr, "Total blocks: %d\n", total_blocks);
+#ifndef NDEBUG
+    MEMORY_DEBUG_DETAIL_2("Total blocks: %lu, size %lu\n", total_blocks, total_size);
 #endif
 
     return total_size;
@@ -920,9 +926,11 @@ move_one_buffer(PARROT_INTERP, ARGIN(Memory_Block *pool),
 
     INTVAL       *flags     = NULL;
     ptrdiff_t     offset    = 0;
-#if RESOURCE_DEBUG
-    if (Buffer_buflen(old_buf) >= RESOURCE_DEBUG_SIZE)
-        debug_print_buf(interp, old_buf);
+#ifndef NDEBUG
+    if (Interp_debug_TEST(interp,
+            PARROT_MEM_STAT_DEBUG_FLAG | PARROT_MEM_DETAIL_DEBUG_FLAG))
+        if (Buffer_buflen(old_buf) >= RESOURCE_DEBUG_SIZE)
+            debug_print_buf(interp, old_buf);
 #else
     UNUSED(interp);
 #endif

@@ -210,13 +210,14 @@ create_initial_context(PARROT_INTERP)
     static const UINTVAL num_regs[] = {32, 32, 32, 32};
 
     /* Create some initial free_list slots. */
-
 #define INITIAL_FREE_SLOTS 8
+
     /* For now create context with 32 regs each. Some src tests (and maybe
      * other extenders) assume the presence of these registers */
-    (void)Parrot_set_new_context(interp, num_regs);
+    PMC * const ctx = Parrot_set_new_context(interp, num_regs);
+    if (!ctx)
+        Parrot_x_panic_and_exit(interp, "Out of mem", __FILE__, __LINE__);
 }
-
 
 /*
 
@@ -647,7 +648,10 @@ INTVAL *
 Parrot_pcc_get_INTVAL_reg(PARROT_INTERP, ARGIN(const PMC *ctx), UINTVAL idx)
 {
     ASSERT_ARGS(Parrot_pcc_get_INTVAL_reg)
-    PARROT_ASSERT(Parrot_pcc_get_regs_used(interp, ctx, REGNO_INT) > idx);
+#ifdef NDEBUG
+    UNUSED(interp)
+#endif
+    PARROT_ASSERT(PCC_GET_REGS_USED(ctx, REGNO_INT) > idx);
     return &(CONTEXT_STRUCT(ctx)->bp.regs_i[idx]);
 }
 
@@ -675,7 +679,10 @@ FLOATVAL *
 Parrot_pcc_get_FLOATVAL_reg(PARROT_INTERP, ARGIN(const PMC *ctx), UINTVAL idx)
 {
     ASSERT_ARGS(Parrot_pcc_get_FLOATVAL_reg)
-    PARROT_ASSERT(Parrot_pcc_get_regs_used(interp, ctx, REGNO_NUM) > idx);
+#ifdef NDEBUG
+    UNUSED(interp)
+#endif
+    PARROT_ASSERT(PCC_GET_REGS_USED(ctx, REGNO_NUM) > idx);
     return &(CONTEXT_STRUCT(ctx)->bp.regs_n[-1L - idx]);
 }
 
@@ -703,7 +710,7 @@ STRING **
 Parrot_pcc_get_STRING_reg(PARROT_INTERP, ARGIN(PMC *ctx), UINTVAL idx)
 {
     ASSERT_ARGS(Parrot_pcc_get_STRING_reg)
-    PARROT_ASSERT(Parrot_pcc_get_regs_used(interp, ctx, REGNO_STR) > idx);
+    PARROT_ASSERT(PCC_GET_REGS_USED(ctx, REGNO_STR) > idx);
     PARROT_GC_WRITE_BARRIER(interp, ctx);
     return &(CONTEXT_STRUCT(ctx)->bp_ps.regs_s[idx]);
 }
@@ -732,7 +739,7 @@ Parrot_pcc_get_PMC_reg(PARROT_INTERP, ARGIN(PMC *ctx), UINTVAL idx)
 {
     ASSERT_ARGS(Parrot_pcc_get_PMC_reg)
     PMC **res;
-    PARROT_ASSERT(Parrot_pcc_get_regs_used(interp, ctx, REGNO_PMC) > idx);
+    PARROT_ASSERT(PCC_GET_REGS_USED(ctx, REGNO_PMC) > idx);
     PARROT_GC_WRITE_BARRIER(interp, ctx);
     res = &(CONTEXT_STRUCT(ctx)->bp_ps.regs_p[-1L - idx]);
     PARROT_ASSERT(!*res || !PObj_on_free_list_TEST(*res));
@@ -756,7 +763,7 @@ UINTVAL
 Parrot_pcc_get_regs_used(SHIM_INTERP, ARGIN(const PMC *ctx), int type)
 {
     ASSERT_ARGS(Parrot_pcc_get_regs_used)
-    return CONTEXT_STRUCT(ctx)->n_regs_used[type];
+    return PCC_GET_REGS_USED(ctx, type);
 }
 
 /*
@@ -790,7 +797,6 @@ Copy Regs_ni into Context.
 */
 
 PARROT_EXPORT
-PARROT_CANNOT_RETURN_NULL
 void
 Parrot_pcc_set_regs_ni(SHIM_INTERP, ARGIN(PMC *ctx), ARGIN(Regs_ni *bp))
 {
@@ -829,7 +835,6 @@ Copy Regs_ps into Context.
 */
 
 PARROT_EXPORT
-PARROT_CANNOT_RETURN_NULL
 void
 Parrot_pcc_set_regs_ps(SHIM_INTERP, ARGIN(PMC *ctx), ARGIN(Regs_ps *bp_ps))
 {

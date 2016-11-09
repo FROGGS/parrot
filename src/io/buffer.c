@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -29,8 +29,8 @@ need to be performed.
 
 static void io_buffer_add_bytes(PARROT_INTERP,
     ARGMOD(IO_BUFFER *buffer),
-    ARGIN(char *s),
-    size_t length)
+    ARGIN(const char *s),
+    const size_t length)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3)
         FUNC_MODIFIES(*buffer);
@@ -42,15 +42,15 @@ static void io_buffer_normalize(PARROT_INTERP,
 
 static INTVAL io_buffer_requires_flush(PARROT_INTERP,
     ARGIN(IO_BUFFER *buffer),
-    ARGIN(char * s),
-    size_t length)
+    ARGIN(const char * s),
+    const size_t length)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3);
 
 static size_t io_buffer_transfer_to_mem(PARROT_INTERP,
     ARGMOD_NULLOK(IO_BUFFER *buffer),
     ARGOUT(char * s),
-    size_t length)
+    const size_t length)
         __attribute__nonnull__(1)
         __attribute__nonnull__(3)
         FUNC_MODIFIES(*buffer)
@@ -140,8 +140,8 @@ Parrot_io_buffer_free(PARROT_INTERP, ARGFREE(IO_BUFFER *buffer))
 
 /*
 
-=item C<void Parrot_io_buffer_add_to_handle(PARROT_INTERP, PMC *handle, INTVAL
-idx, size_t length, INTVAL flags)>
+=item C<void Parrot_io_buffer_add_to_handle(PARROT_INTERP, PMC *handle, const
+INTVAL idx, const size_t length, const INTVAL flags)>
 
 Allocate a new C<IO_BUFFER*> and attach it to PMC C<handle> at position
 C<idx>. Valid positions are C<IO_PTR_IDX_READ_BUFFER> and
@@ -149,7 +149,7 @@ C<IO_PTR_IDX_WRITE_BUFFER>. If the buffer already exists, resize it to match
 the specifications.
 
 =item C<void Parrot_io_buffer_remove_from_handle(PARROT_INTERP, PMC *handle,
-INTVAL idx)>
+const INTVAL idx)>
 
 Remove the buffer from C<handle> at position C<idx>. Valid positions are
 C<IO_PTR_IDX_READ_BUFFER> and  C<IO_PTR_IDX_WRITE_BUFFER>.
@@ -159,8 +159,8 @@ C<IO_PTR_IDX_READ_BUFFER> and  C<IO_PTR_IDX_WRITE_BUFFER>.
 */
 
 void
-Parrot_io_buffer_add_to_handle(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL idx,
-        size_t length, INTVAL flags)
+Parrot_io_buffer_add_to_handle(PARROT_INTERP, ARGMOD(PMC *handle), const INTVAL idx,
+        const size_t length, const INTVAL flags)
 {
     ASSERT_ARGS(Parrot_io_buffer_add_to_handle)
     if (idx != IO_PTR_IDX_READ_BUFFER && idx != IO_PTR_IDX_WRITE_BUFFER)
@@ -183,7 +183,7 @@ Parrot_io_buffer_add_to_handle(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL idx,
 }
 
 void
-Parrot_io_buffer_remove_from_handle(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL idx)
+Parrot_io_buffer_remove_from_handle(PARROT_INTERP, ARGMOD(PMC *handle), const INTVAL idx)
 {
     ASSERT_ARGS(Parrot_io_buffer_remove_from_handle)
     if (idx != IO_PTR_IDX_READ_BUFFER && idx != IO_PTR_IDX_WRITE_BUFFER)
@@ -205,7 +205,7 @@ Parrot_io_buffer_remove_from_handle(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL i
 =item C<size_t Parrot_io_buffer_resize(PARROT_INTERP, IO_BUFFER *buffer, size_t
 new_size)>
 
-Resize the C<buffer> to be able to accomodate the C<new_size>. The buffer may
+Resize the C<buffer> to be able to accommodate the C<new_size>. The buffer may
 grow but probably will not shrink to avoid data loss. Return the new size of
 the buffer.
 
@@ -323,7 +323,7 @@ Parrot_io_buffer_read_b(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
 /*
 
 =item C<static size_t io_buffer_transfer_to_mem(PARROT_INTERP, IO_BUFFER
-*buffer, char * s, size_t length)>
+*buffer, char * s, const size_t length)>
 
 Transfer C<length> bytes from the C<buffer> to the memory chunk pointed to by
 C<s>, removing those bytes from the buffer. Return the number of bytes
@@ -335,7 +335,7 @@ actually copied.
 
 static size_t
 io_buffer_transfer_to_mem(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
-        ARGOUT(char * s), size_t length)
+        ARGOUT(char * s), const size_t length)
 {
     ASSERT_ARGS(io_buffer_transfer_to_mem)
     if (!buffer || BUFFER_IS_EMPTY(buffer))
@@ -344,8 +344,6 @@ io_buffer_transfer_to_mem(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
     PARROT_ASSERT(length > 0);
 
     {
-        const size_t length_left = length == PIO_READ_SIZE_ANY ?
-                                             BUFFER_USED_SIZE(buffer) : length;
         const size_t used_length = BUFFER_USED_SIZE(buffer);
         const size_t copy_length = used_length <= length ? used_length : length;
 
@@ -407,7 +405,7 @@ io_buffer_normalize(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer))
 /*
 
 =item C<static INTVAL io_buffer_requires_flush(PARROT_INTERP, IO_BUFFER *buffer,
-char * s, size_t length)>
+const char * s, const size_t length)>
 
 HACK. Determine if the buffer needs a special flush. This is only required if
 the buffer is marked as C<PIO_BF_LINEBUF> and if the input sequence contains
@@ -421,7 +419,7 @@ be flushed, C<0> otherwise.
 
 static INTVAL
 io_buffer_requires_flush(SHIM_INTERP, ARGIN(IO_BUFFER *buffer),
-        ARGIN(char * s), size_t length)
+        ARGIN(const char * s), const size_t length)
 {
     ASSERT_ARGS(io_buffer_requires_flush)
     /* Something of an ugly hack borrowed from the old system. If we're in
@@ -440,7 +438,7 @@ io_buffer_requires_flush(SHIM_INTERP, ARGIN(IO_BUFFER *buffer),
 /*
 
 =item C<size_t Parrot_io_buffer_write_b(PARROT_INTERP, IO_BUFFER *buffer, PMC *
-handle, const IO_VTABLE *vtable, char *s, size_t length)>
+handle, const IO_VTABLE *vtable, const char *s, const size_t length)>
 
 Write C<length> bytes from C<s> into the C<buffer>. If the buffer fills or
 needs to be flushed, the data will be written through to C<handle>. If
@@ -453,20 +451,18 @@ bytes added, probably C<length>.
 
 size_t
 Parrot_io_buffer_write_b(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
-        ARGMOD(PMC * handle), ARGIN(const IO_VTABLE *vtable), ARGIN(char *s),
-        size_t length)
+        ARGMOD(PMC * handle), ARGIN(const IO_VTABLE *vtable), ARGIN(const char *s),
+        const size_t length)
 {
     ASSERT_ARGS(Parrot_io_buffer_write_b)
     if (!buffer)
-        return vtable->write_b(interp, handle, s, length);
+        return (size_t)vtable->write_b(interp, handle, s, length);
 
     if (!length)
         return 0;
 
     else {
-        size_t written = 0;
         const size_t total_size  = buffer->buffer_size;
-        const size_t used_size   = BUFFER_USED_SIZE(buffer);
         const size_t avail_size  = BUFFER_FREE_END_SPACE(buffer);
         const INTVAL needs_flush = io_buffer_requires_flush(interp, buffer, s, length);
 
@@ -483,7 +479,7 @@ Parrot_io_buffer_write_b(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
         if (length > total_size) {
             Parrot_io_buffer_flush(interp, buffer, handle, vtable);
             PARROT_ASSERT(BUFFER_IS_EMPTY(buffer));
-            return vtable->write_b(interp, handle, s, length);
+            return (size_t)vtable->write_b(interp, handle, s, length);
         }
 
         /* Else, we have more data than available space, but the buffer should
@@ -500,8 +496,8 @@ Parrot_io_buffer_write_b(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
 
 /*
 
-=item C<static void io_buffer_add_bytes(PARROT_INTERP, IO_BUFFER *buffer, char
-*s, size_t length)>
+=item C<static void io_buffer_add_bytes(PARROT_INTERP, IO_BUFFER *buffer, const
+char *s, const size_t length)>
 
 Add C<length> bytes from C<s> to the C<buffer>. Assume that the number of
 bytes to add is less than or equal to the amount of available space for
@@ -512,8 +508,8 @@ writing.
 */
 
 static void
-io_buffer_add_bytes(SHIM_INTERP, ARGMOD(IO_BUFFER *buffer), ARGIN(char *s),
-        size_t length)
+io_buffer_add_bytes(SHIM_INTERP, ARGMOD(IO_BUFFER *buffer), ARGIN(const char *s),
+        const size_t length)
 {
     ASSERT_ARGS(io_buffer_add_bytes)
 
@@ -547,8 +543,7 @@ Parrot_io_buffer_flush(PARROT_INTERP, ARGMOD_NULLOK(IO_BUFFER *buffer),
     ASSERT_ARGS(Parrot_io_buffer_flush)
     size_t bytes_written = 0;
     if (buffer && !BUFFER_IS_EMPTY(buffer)) {
-        size_t used_length = BUFFER_USED_SIZE(buffer);
-        bytes_written += vtable->write_b(interp, handle, (char *)buffer->buffer_start,
+        bytes_written += vtable->write_b(interp, handle, buffer->buffer_start,
                                          BUFFER_USED_SIZE(buffer));
         Parrot_io_buffer_clear(interp, buffer);
     }
@@ -844,7 +839,9 @@ Parrot_io_buffer_seek(PARROT_INTERP, ARGMOD(IO_BUFFER *buffer),
     PIOOFF_T cur_pos = vtable->get_position(interp, handle);
     PIOOFF_T pos_diff;
 
-    PARROT_ASSERT(w == SEEK_SET);
+    if (w != SEEK_SET)
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Illegal seek origin argument, only SEEK_SET is supported");
 
     if (cur_pos == offset)
         return offset;
@@ -856,7 +853,9 @@ Parrot_io_buffer_seek(PARROT_INTERP, ARGMOD(IO_BUFFER *buffer),
         return vtable->seek(interp, handle, offset, w);
     }
     pos_diff = offset - cur_pos;
-    PARROT_ASSERT(pos_diff > 0);
+    if (pos_diff < 0)
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
+            "Illegal seek offset argument");
 
     if ((size_t)pos_diff > BUFFER_USED_SIZE(buffer)) {
         Parrot_io_buffer_clear(interp, buffer);

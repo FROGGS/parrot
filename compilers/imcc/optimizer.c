@@ -215,7 +215,7 @@ static int used_once(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit))
 
 =item C<int pre_optimize(imc_info_t *imcc, IMC_Unit *unit)>
 
-Handles optimizations occuring before the construction of the CFG.
+Handles optimizations occurring before the construction of the CFG.
 
 =cut
 
@@ -240,7 +240,7 @@ pre_optimize(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit))
 
 =item C<int cfg_optimize(imc_info_t *imcc, IMC_Unit *unit)>
 
-Handles optimizations occuring during the construction of the CFG.
+Handles optimizations occurring during the construction of the CFG.
 Returns TRUE if any optimization was performed. Otherwise, returns
 FALSE.
 
@@ -933,12 +933,12 @@ eval_ins(ARGMOD(imc_info_t *imcc), ARGIN(const char *op), size_t ops,
     }
 
     /* eval the opcode */
-    new_runloop_jump_point(imcc->interp);
+    Parrot_runloop_new_jump_point(imcc->interp);
     if (setjmp(imcc->interp->current_runloop->resume))
         return -1;
 
     pc = (OP_INFO_OPFUNC(op_info)) (eval, imcc->interp);
-    free_runloop_jump_point(imcc->interp);
+    Parrot_runloop_free_jump_point(imcc->interp);
     /* the returned pc is either incremented by op_count or is eval,
      * as the branch offset is 0 - return true if it branched
      */
@@ -979,7 +979,7 @@ IMCC_subst_constants(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit),
         "iseq", "isne", "islt", "isle", "isgt", "isge", "cmp", "concat"
     };
     PARROT_OBSERVER const char * const ops2[] = {
-        "abs", "neg", "not", "fact", "sqrt", "ceil", "floor"
+        "abs", "neg", "not", "fact", "sqrt", "ceil", "floor",
         "acos", "acot", "asec", "asin", "atan",
         "cos", "cosh", "coth",
         "exp", "ln", "log10", "log2", "sec",
@@ -1195,7 +1195,8 @@ branch_branch(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit))
                     IMCC_debug_ins(imcc, DEBUG_OPT1, next);
                     unit->ostat.branch_branch++;
                     if (regno < 0)
-                        Parrot_ex_throw_from_c_args(imcc->interp, NULL, 1,
+                        Parrot_ex_throw_from_c_noargs(imcc->interp,
+                            EXCEPTION_INTERNAL_PANIC,
                             "Register number determination failed in branch_branch()");
 
                     ins->symregs[regno] = next->symregs[0];
@@ -1366,7 +1367,8 @@ branch_cond_loop_swap(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit), ARGMOD(I
 
             reg_index = get_branch_regno(cond);
             if (reg_index < 0)
-                Parrot_ex_throw_from_c_args(imcc->interp, NULL, 1,
+                Parrot_ex_throw_from_c_noargs(imcc->interp,
+                    EXCEPTION_INTERNAL_PANIC,
                     "Negative branch register address detected");
 
             regs[reg_index] = mk_label_address(imcc, label);
@@ -1658,11 +1660,11 @@ used_once(ARGMOD(imc_info_t *imcc), ARGMOD(IMC_Unit *unit))
     int opt = 0;
 
     for (ins = unit->instructions; ins; ins = ins->next) {
-        if (ins->symregs) {
-            SymReg * const r = ins->symregs[0];
+        SymReg * const r = ins->symregs[0];
+        if (r) {
             /* GH 1036: keep side-effects: P0 = pop P1 vs pop P1 */
-            if (r && ins->type & ITPUREFUNC
-                  && (r->use_count == 1 && r->lhs_use_count == 1)) {
+            if (ins->type & ITPUREFUNC
+            && (r->use_count == 1 && r->lhs_use_count == 1)) {
                 IMCC_debug(imcc, DEBUG_OPT2, "used once deleted ");
                 IMCC_debug_ins(imcc, DEBUG_OPT2, ins);
 

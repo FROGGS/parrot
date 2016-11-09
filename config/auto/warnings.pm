@@ -117,10 +117,10 @@ sub _init {
     #   -Wsign-compare -Wtype-limits -Wuninitialized -Wunused-parameter (only with -Wunused or
     #   -Wall) -Wunused-but-set-parameter (only with -Wunused or -Wall)
     my @gcc_or_gpp_basic = qw(
+        -fpermissive
         -falign-functions=16
         -funit-at-a-time
         -fexcess-precision=standard
-        -fpermissive
         -maccumulate-outgoing-args
         -Wall
         -Wextra
@@ -129,10 +129,7 @@ sub _init {
         -Wdisabled-optimization
         -Wdiv-by-zero
         -Wendif-labels
-        -Wformat-extra-args
-        -Wformat-nonliteral
-        -Wformat-security
-        -Wformat-y2k
+        -Wno-format
         -Wimplicit
         -Wimport
         -Winit-self
@@ -178,18 +175,24 @@ sub _init {
     my @gcc_or_gpp_cage = qw(
         -std=c89
         -Wfloat-equal
+        -Wformat-extra-args
+        -Wformat-nonliteral
+        -Wformat-security
+        -Wformat-y2k
         -Wformat=2
         -Wlarger-than-4096
         -Wmissing-format-attribute
         -Wdeprecated-declarations
-        -Wno-format-extra-args
         -Wno-import
         -Wredundant-decls
         -Wshadow
         -Wstrict-overflow=5
         -Wsuggest-attribute=const
         -Wsuggest-attribute=noreturn
+        -Wsuggest-attribute=returns_nonnull
         -Wsuggest-attribute=pure
+        -Wsuggest-attribute=warn_unused_result
+        -Wsuggest-attribute=hot
         -Wtrampolines
         -Wunreachable-code
         -Wunsafe-loop-optimizations
@@ -214,7 +217,9 @@ sub _init {
     # strip from the list
     $gcc->{'todo'} = $gpp->{'todo'} = {
         '-Wformat-nonliteral' => [ qw(
-            src/spf_render.c
+            src/string/spf_render.c
+            src/io/api.c
+            src/exit.c
             compilers/imcc/optimizer.c
         ) ],
         '-Wstrict-prototypes' => [ qw(
@@ -229,8 +234,13 @@ sub _init {
         ) ],
         '-Wswitch-default' => [ qw(
             compilers/imcc/imclexer.c
+            compilers/imcc/imcparser.c
         ) ],
         '-Wcast-qual' => [ qw(
+            compilers/imcc/imcparser.c
+        ) ],
+        '-Wsign-compare' => [ qw(
+            compilers/imcc/imclexer.c
             compilers/imcc/imcparser.c
         ) ],
     };
@@ -288,15 +298,17 @@ sub _init {
     $data->{'warnings'}{'clang'}->{'cage'} = [ @gcc_or_gpp_cage, '-Wcast-align' ];
 
     $data->{'warnings'}{'clang'}->{'override'} = {
-        '-Wno-parentheses-equality' => [ qw(
-            src/ops/core_ops.c
-        ) ],
         '-Wno-format-nonliteral' => [ qw(
             src/string/sprintf.c
             src/string/spf_render.c
         ) ],
         '-Wno-unused-parameter' => [ qw(
             compilers/imcc/imclexer.c
+            src/dynoplibs/math_ops.c
+        ) ],
+        '-Wno-sign-compare' => [ qw(
+            compilers/imcc/imclexer.c
+            compilers/imcc/imcparser.c
         ) ],
     };
 
@@ -331,6 +343,13 @@ sub runstep {
     ) {
         push @{$self->{'warnings'}{$compiler}{'basic'}},
             '-fvisibility=hidden';
+    };
+
+    # cygwin gcc is more particular about -fpermissive in c mode.
+    # this is the 1st element
+    if ( $^O eq 'cygwin' and $compiler eq 'gcc' and
+         $conf->data->get('gccversion') >= 4.0 ) {
+        shift @{$self->{'warnings'}{'gcc'}{'basic'}};
     };
 
     # icu4.2 -4.9 uset.h had a wrong uset_openEmpty() declaration missing (void) GH #867

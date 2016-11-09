@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -55,7 +55,7 @@ print_sub_name(PARROT_INTERP, ARGIN_NULLOK(PMC *sub))
     Parrot_io_eprintf(tracer, "# Calling sub '%Ss'\n# ",
         Parrot_sub_full_sub_name(interp, sub));
 
-    print_pbc_location(interp);
+    Parrot_print_pbc_location(interp);
 }
 
 pmclass Sub auto_attrs provides invokable {
@@ -300,7 +300,7 @@ Sets the pointer to the actual subroutine.
     VTABLE void set_pointer(void *value) :no_wb {
         UNUSED(SELF)
         UNUSED(value)
-        Parrot_ex_throw_from_c_args(INTERP, NULL, EXCEPTION_INVALID_OPERATION,
+        Parrot_ex_throw_from_c_noargs(INTERP, EXCEPTION_INVALID_OPERATION,
             "Don't set the address of a sub\nuse .const 'Sub' instead");
     }
 
@@ -335,11 +335,11 @@ now.> -DRS
 */
 
     VTABLE INTVAL get_integer_keyed(PMC *key) :no_wb {
-        UNUSED(key)
         Parrot_Sub_attributes *sub;
-        PMC_get_sub(INTERP, SELF, sub);
+        UNUSED(key)
 
-        return (INTVAL) (sub->seg->base.data);
+        PMC_get_sub(INTERP, SELF, sub);
+        return PTR2INTVAL(sub->seg->base.data);
     }
 
 
@@ -522,7 +522,7 @@ Invokes the subroutine.
 
         /* switch code segment if needed */
         if (INTERP->code != sub->seg)
-            Parrot_switch_to_cs(INTERP, sub->seg, 1);
+            Parrot_pf_switch_to_cs(INTERP, sub->seg, 1);
 
         return pc;
     }
@@ -589,7 +589,7 @@ Set SELF to the data in other.
             PARROT_GC_WRITE_BARRIER(INTERP, SELF);
         }
         else
-            Parrot_ex_throw_from_c_args(INTERP, NULL,
+            Parrot_ex_throw_from_c_noargs(INTERP,
                 EXCEPTION_INVALID_OPERATION,
                 "Can't assign a non-Sub type to a Sub");
     }

@@ -121,7 +121,7 @@ static STRING * ucs2_to_encoding(PARROT_INTERP, ARGIN(const STRING *src))
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 /* HEADERIZER END: static */
 
-#define UNIMPL Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED, \
+#define UNIMPL Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNIMPLEMENTED, \
     "unimpl ucs2")
 
 /*
@@ -147,8 +147,8 @@ ucs2_to_encoding(PARROT_INTERP, ARGIN(const STRING *src))
 
     /* conversion to utf16 downgrades to ucs-2 if possible - check result */
     if (result->encoding == Parrot_utf16_encoding_ptr)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_ENCODING,
-            "Lossy conversion to UCS-2\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_ENCODING,
+            "Lossy conversion to UCS-2");
 
     return result;
 }
@@ -172,8 +172,8 @@ ucs2_check_codepoint(PARROT_INTERP, UINTVAL c)
     if (UNICODE_IS_SURROGATE(c)
     || (c >= 0xFDD0 && c <= 0xFDEF)
     ||  c >= 0xFFFE)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                "Invalid character in UCS-2 string\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                "Invalid character in UCS-2 string");
 }
 
 /*
@@ -195,8 +195,8 @@ ucs2_scan(PARROT_INTERP, ARGMOD(STRING *src))
     UINTVAL               i;
 
     if (src->bufused & 1)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-            "Unaligned end in UCS-2 string\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+            "Unaligned end in UCS-2 string");
 
     for (i = 0; i < len; ++i) {
         ucs2_check_codepoint(interp, ptr[i]);
@@ -434,6 +434,7 @@ static STR_VTABLE Parrot_ucs2_encoding = {
     unicode_upcase,
     unicode_downcase,
     unicode_titlecase,
+    unicode_foldcase,
     unicode_upcase_first,
     unicode_downcase_first,
     unicode_titlecase_first,

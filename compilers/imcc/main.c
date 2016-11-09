@@ -3,7 +3,7 @@
  * Intermediate Code Compiler for Parrot.
  *
  * Copyright (C) 2002 Melvin Smith <melvin.smith@mindspring.com>
- * Copyright (C) 2003-2011, Parrot Foundation.
+ * Copyright (C) 2003-2014, Parrot Foundation.
  */
 
 /*
@@ -522,7 +522,7 @@ imcc_run_compilation_internal(ARGMOD(imc_info_t *imcc), ARGIN(STRING *source),
 {
     ASSERT_ARGS(imcc_run_compilation_internal)
     yyscan_t yyscanner = imcc_get_scanner(imcc);
-    PackFile * const pf_raw      = PackFile_new(imcc->interp, 0);
+    PackFile * const pf_raw      = Parrot_pf_new(imcc->interp, 0);
     PMC      * const old_packfilepmc = Parrot_pf_get_current_packfile(imcc->interp);
     STRING   * const pf_path = is_file ? source : STRINGNULL;
     PMC      * const packfilepmc = Parrot_pf_get_packfile_pmc(imcc->interp, pf_raw, pf_path);
@@ -562,8 +562,8 @@ imcc_run_compilation_internal(ARGMOD(imc_info_t *imcc), ARGIN(STRING *source),
 
     /* TODO: Do not use this function, it is deprecated (TT #2140). Find a
        better way to handle :immediate and :postcomp subs instead. */
-    PackFile_fixup_subs(imcc->interp, PBC_IMMEDIATE, packfilepmc);
-    PackFile_fixup_subs(imcc->interp, PBC_POSTCOMP, packfilepmc);
+    Parrot_pf_fixup_subs(imcc->interp, PBC_IMMEDIATE, packfilepmc);
+    Parrot_pf_fixup_subs(imcc->interp, PBC_POSTCOMP, packfilepmc);
 
     if (!PMC_IS_NULL(old_packfilepmc))
         Parrot_pf_set_current_packfile(imcc->interp, old_packfilepmc);

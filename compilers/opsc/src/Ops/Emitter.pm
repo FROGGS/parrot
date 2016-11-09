@@ -94,29 +94,21 @@ method print_c_header_files() {
 method emit_c_op_func_header($fh) {
 
     self._emit_guard_prefix($fh, self<func_header>);
-
     self._emit_preamble($fh);
-
     self._emit_includes($fh);
 
     # Emit runcore specific part.
     self.trans.emit_c_op_funcs_header_part($fh);
-
     self._emit_guard_suffix($fh, self<func_header>);
-
     self._emit_coda($fh);
 }
 
 method emit_c_op_enum_header($fh) {
 
     self._emit_guard_prefix($fh, self<enum_header>);
-
     self._emit_preamble($fh);
-
     self._emit_c_op_enum_header_part($fh);
-
     self._emit_guard_suffix($fh, self<enum_header>);
-
     self._emit_coda($fh);
 }
 
@@ -133,13 +125,9 @@ method print_ops_num_files() {
 method emit_c_opsenum_header($fh, $file) {
 
     self._emit_guard_prefix($fh, $file);
-
     self._emit_preamble($fh);
-
     self.emit_opsenum_h_body($fh);
-
     self._emit_guard_suffix($fh, $file);
-
     self._emit_coda($fh);
 }
 
@@ -164,9 +152,9 @@ method emit_opsenum_h_body($fh) {
 method print_c_source_file() {
     # Build file in memeory
     my $fh := pir::new__Ps('StringHandle');
-    $fh.open('dummy.c', 'w');
+    $fh.open('dummy.c', 'rw');
     self.emit_c_source_file($fh);
-    $fh.close();
+    $fh.seek(0, 0);
 
     # ... and write it to disk
     my $final := pir::new__Ps('FileHandle');
@@ -177,12 +165,10 @@ method print_c_source_file() {
 }
 
 method emit_c_source_file($fh) {
+
     self._emit_source_preamble($fh);
-
     self.trans.emit_source_part(self, $fh);
-
     self._emit_op_lib_descriptor($fh);
-
     self.trans.emit_op_lookup(self, $fh);
 
     self._emit_init_func($fh);
@@ -301,7 +287,7 @@ $load_func(PARROT_INTERP)
 {
     PMC *const lib = Parrot_pmc_new(interp, enum_class_ParrotLibrary);
     ((Parrot_ParrotLibrary_attributes*)PMC_data(lib))->oplib_init = (void *) | ~ self.init_func ~q|;
-    dynop_register(interp, lib);
+    Parrot_dynop_register(interp, lib);
     return lib;
 }
 |);

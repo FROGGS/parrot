@@ -459,7 +459,7 @@ u_iscclass(PARROT_INTERP, UINTVAL codepoint, INTVAL flags)
     }
 
     if (flags & ~(enum_cclass_whitespace | enum_cclass_numeric | enum_cclass_newline))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LIBRARY_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LIBRARY_ERROR,
             "no ICU lib loaded");
 
     return 0;
@@ -495,7 +495,7 @@ encoding_ord_error(PARROT_INTERP, ARGIN(const STRING *s), INTVAL offset)
     else
         err_msg = "Unknown encoding_ord_error";
 
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_ORD_OUT_OF_STRING,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ORD_OUT_OF_STRING,
         err_msg);
 }
 
@@ -532,7 +532,7 @@ encoding_substr(PARROT_INTERP, ARGIN(const STRING *src), INTVAL offset, INTVAL l
         if ((UINTVAL)offset == strlen || length <= 0)
             return Parrot_str_new_constant(interp, "");
 
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_SUBSTR_OUT_OF_STRING,
             "Cannot take substr outside string");
     }
@@ -652,7 +652,7 @@ return_and_cache:
     if (iter.charpos > 128) {
         last_char_offset = iter.charpos;
         cached_iter = iter;
-        last_string = (STRING*)src;
+        last_string = (STRING*)PTR2INTVAL(src);
     }
     return iter.charpos - 1;
 }
@@ -727,7 +727,7 @@ return_and_cache:
     if (iter.charpos > 128) {
         last_char_offset = iter.charpos;
         cached_iter = iter;
-        last_string = (STRING*)src;
+        last_string = (STRING*)PTR2INTVAL(src);
     }
     return iter.charpos - 1;
 }
@@ -765,13 +765,13 @@ Decompose function. This function is not yet implemented.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
+PARROT_DOES_NOT_RETURN
 STRING*
 encoding_decompose(PARROT_INTERP, SHIM(const STRING *src))
 {
     ASSERT_ARGS(encoding_decompose)
     /* TODO: https://trac.parrot.org/parrot/wiki/StringsTasklist Implement this. */
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNIMPLEMENTED,
         "Decompose not implemented");
 }
 
@@ -803,7 +803,7 @@ fixed8_to_encoding(PARROT_INTERP, ARGIN(const STRING *src),
 
             for (i = 0; i < src->strlen; ++i) {
                 if (ptr[i] >= limit)
-                    Parrot_ex_throw_from_c_args(interp, NULL,
+                    Parrot_ex_throw_from_c_noargs(interp,
                         EXCEPTION_LOSSY_CONVERSION,
                         "Lossy conversion to single byte encoding");
             }
@@ -826,7 +826,7 @@ fixed8_to_encoding(PARROT_INTERP, ARGIN(const STRING *src),
             const UINTVAL c = STRING_iter_get_and_advance(interp, src, &iter);
 
             if (c >= limit)
-                Parrot_ex_throw_from_c_args(interp, NULL,
+                Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_LOSSY_CONVERSION,
                     "Lossy conversion to single byte encoding");
 
@@ -1087,7 +1087,7 @@ fixed_substr(PARROT_INTERP, ARGIN(const STRING *src), INTVAL offset, INTVAL leng
         if ((UINTVAL)offset == strlen || length <= 0)
             return Parrot_str_new_constant(interp, "");
 
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_SUBSTR_OUT_OF_STRING,
             "Cannot take substr outside string");
     }
@@ -1098,6 +1098,12 @@ fixed_substr(PARROT_INTERP, ARGIN(const STRING *src), INTVAL offset, INTVAL leng
         return return_string;
 
     bytes_per_codepoint = src->encoding->max_bytes_per_codepoint;
+    /* gc inf bug GH #1136 */
+#if !defined(NDEBUG) && defined(MEMORY_DEBUG)
+    if (bytes_per_codepoint > 4)
+        fprintf(stderr, "wrong src: %p\n", src);
+#endif
+    PARROT_ASSERT(bytes_per_codepoint <= 4);
     maxlen              = strlen - offset;
 
     if ((UINTVAL)length > maxlen)
@@ -1323,7 +1329,7 @@ fixed8_iter_set_and_advance(PARROT_INTERP,
     UINTVAL limit = str->encoding == Parrot_ascii_encoding_ptr ? 0x80 : 0x100;
 
     if (c >= limit)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LOSSY_CONVERSION,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LOSSY_CONVERSION,
             "Lossy conversion to single byte encoding");
 
     ptr[iter->charpos++] = c;
@@ -1421,7 +1427,7 @@ unicode_compose(PARROT_INTERP, ARGIN(const STRING *src))
     return dest;
 #else
     UNUSED(src);
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LIBRARY_ERROR,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LIBRARY_ERROR,
         "no ICU lib loaded");
 #endif
 }
@@ -1430,6 +1436,7 @@ unicode_compose(PARROT_INTERP, ARGIN(const STRING *src))
 #define ENCODING_UPCASE     1
 #define ENCODING_DOWNCASE   2
 #define ENCODING_TITLECASE  3
+#define ENCODING_FOLDCASE   4
 
 /*
 
@@ -1468,6 +1475,11 @@ convert_case_buf(PARROT_INTERP, ARGMOD_NULLOK(char *dest_buf), size_t dest_len,
                            (const UChar *)src_buf, src_len / 2,
                            NULL, NULL, &err);
         break;
+      case ENCODING_FOLDCASE:
+        res = u_strFoldCase((UChar *)dest_buf, dest_len / 2,
+                            (const UChar *)src_buf, src_len / 2,
+                            U_FOLD_CASE_DEFAULT, &err);
+        break;
       default:
         res = 0; /* Should never happen, just to avoid a warning */
         break;
@@ -1479,7 +1491,7 @@ convert_case_buf(PARROT_INTERP, ARGMOD_NULLOK(char *dest_buf), size_t dest_len,
     return res * 2;
 #else
     if (mode == ENCODING_TITLECASE)
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_LIBRARY_ERROR, "no ICU lib loaded");
     else if (dest_buf) {
         const Parrot_UInt2 *s = (const Parrot_UInt2 *)src_buf;
@@ -1490,19 +1502,19 @@ convert_case_buf(PARROT_INTERP, ARGMOD_NULLOK(char *dest_buf), size_t dest_len,
         for (i = 0; i < len; ++i) {
             unsigned int c = s[i];
             if (c > 255) {
-                Parrot_ex_throw_from_c_args(interp, NULL,
+                Parrot_ex_throw_from_c_noargs(interp,
                      EXCEPTION_LIBRARY_ERROR, "no ICU lib loaded");
             }
             switch (mode) {
               case ENCODING_UPCASE:
                 d[i] = (c >= 0xe0 && c != 0xf7)
                          ? c & ~0x20
-                         : toupper((unsigned char)c);
+                         : (Parrot_UInt2)toupper((unsigned char)c);
                 break;
               case ENCODING_DOWNCASE:
                 d[i] = (c >= 0xc0 && c != 0xd7 && c <= 0xde)
                          ? c | 0x20
-                         : tolower((unsigned char)c);
+                         : (Parrot_UInt2)tolower((unsigned char)c);
                 break;
               default:
                 d[i] = s[i];
@@ -1631,6 +1643,25 @@ unicode_titlecase(PARROT_INTERP, ARGIN(const STRING *src))
     return unicode_convert_case(interp, src, ENCODING_TITLECASE);
 }
 
+/*
+
+=item C<STRING * unicode_foldcase(PARROT_INTERP, const STRING *src)>
+
+Perform a Fold-Case on the string
+
+=cut
+
+*/
+
+PARROT_CANNOT_RETURN_NULL
+STRING *
+unicode_foldcase(PARROT_INTERP, ARGIN(const STRING *src))
+{
+    ASSERT_ARGS(unicode_foldcase)
+    /* This forces an up-convertion to utf16, which might not be desirable
+       in all cases */
+    return unicode_convert_case(interp, src, ENCODING_FOLDCASE);
+}
 
 /*
 
@@ -1643,13 +1674,13 @@ grapheme supports it. Not implemented.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
+PARROT_DOES_NOT_RETURN
 STRING*
 unicode_upcase_first(PARROT_INTERP, SHIM(const STRING *src))
 {
     ASSERT_ARGS(unicode_upcase_first)
     /* TODO: https://trac.parrot.org/parrot/wiki/StringsTasklist Implement this. */
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNIMPLEMENTED,
         "Unicode upcase_first not implemented");
 }
 
@@ -1665,13 +1696,13 @@ the grapheme supports it. Not implemented
 
 */
 
-PARROT_CANNOT_RETURN_NULL
+PARROT_DOES_NOT_RETURN
 STRING*
 unicode_downcase_first(PARROT_INTERP, SHIM(const STRING *src))
 {
     ASSERT_ARGS(unicode_downcase_first)
     /* TODO: https://trac.parrot.org/parrot/wiki/StringsTasklist Implement this. */
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNIMPLEMENTED,
         "Unicode downcase_first not implemented");
 }
 
@@ -1687,13 +1718,13 @@ string supports it. Not implemented.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
+PARROT_DOES_NOT_RETURN
 STRING*
 unicode_titlecase_first(PARROT_INTERP, SHIM(const STRING *src))
 {
     ASSERT_ARGS(unicode_titlecase_first)
     /* TODO: https://trac.parrot.org/parrot/wiki/StringsTasklist Implement this. */
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNIMPLEMENTED,
         "Unicode titlecase_first not implemented");
 }
 

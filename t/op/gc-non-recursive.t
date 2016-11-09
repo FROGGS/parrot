@@ -1,5 +1,5 @@
 #!./parrot
-# Copyright (C) 2011, Parrot Foundation.
+# Copyright (C) 2011-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -13,6 +13,9 @@ t/op/gc-non-recursive.t - test for marking very large linked-list
 
 See http://trac.parrot.org/parrot/ticket/1723
 
+It is a good test to detect GC problems with the string compactor
+in ms and ms2.
+
 =cut
 
 
@@ -20,6 +23,8 @@ See http://trac.parrot.org/parrot/ticket/1723
     .include 'test_more.pir'
 
     .local pmc iterclass, intclass
+    .local int maxloop
+    maxloop = 500000
 
     .local pmc config
     .local string optimize
@@ -27,8 +32,10 @@ See http://trac.parrot.org/parrot/ticket/1723
     load_bytecode 'config.pbc'
     config = '_config'()
     optimize = config['optimize']
-    # with a non-optimized build do not this test
-    if optimize == '' goto non_optimized
+    # with a non-optimized build loop less
+    if optimize != '' goto optimized
+    maxloop = 50000
+  optimized:
 
     iterclass = newclass ['RangeIter']
     addattribute iterclass, '$!value'
@@ -43,7 +50,7 @@ See http://trac.parrot.org/parrot/ticket/1723
     next = head
   loop:
     ($I0, next) = next.'reify'()
-    if $I0 < 500000 goto loop
+    if $I0 < maxloop goto loop
     sweep 1
     ok(1, "Marking of large list doesn't exhaust C stack")
     done_testing()

@@ -1,13 +1,13 @@
 /*
-Copyright (C) 2011-2012, Parrot Foundation.
+Copyright (C) 2011-2014, Parrot Foundation.
 
 =head1 NAME
 
-src/platform/generic/file.c - Generic UNIX file functions
+src/platform/generic/file.c - Generic POSIX file functions
 
 =head1 DESCRIPTION
 
-This file implements OS-specific file functions for generic UNIX platforms.
+This file implements OS-specific file functions for generic POSIX platforms.
 
 =head2 Functions
 
@@ -192,7 +192,11 @@ static void
 convert_stat_buf(ARGIN(struct stat *stat_buf), ARGOUT(Parrot_Stat_Buf *buf))
 {
     ASSERT_ARGS(convert_stat_buf)
+#ifdef PARROT_HAS_STAT_ST_TIMESPEC_T
+    static const st_timespec_t zero = { 0, 0 };
+#else
     static const struct timespec zero = { 0, 0 };
+#endif
 
     INTVAL type;
 
@@ -353,6 +357,10 @@ be one of:
 
 =item * C<STAT_ISDEV>
 
+=item * C<STAT_ISLNK>
+
+if S_ISLNK is supported by the platform.
+
 =item * C<STAT_ACCESSTIME>
 
 =item * C<STAT_MODIFYTIME>
@@ -381,7 +389,11 @@ be one of:
 
 =item * C<STAT_PLATFORM_BLOCKSIZE>
 
+if supported by the platform.
+
 =item * C<STAT_PLATFORM_BLOCKS>
+
+if supported by the platform.
 
 =back
 
@@ -463,7 +475,7 @@ stat_intval(PARROT_INTERP, ARGIN(struct stat *statbuf), INTVAL thing, int status
 #ifdef PARROT_HAS_BSD_STAT_EXTN
         result = statbuf->st_blksize;
 #else
-        Parrot_ex_throw_from_c_args(interp, NULL, 1,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ARG_OP_NOT_HANDLED,
                     "STAT_PLATFORM_BLOCKSIZE not supported");
 #endif
         break;
@@ -471,7 +483,7 @@ stat_intval(PARROT_INTERP, ARGIN(struct stat *statbuf), INTVAL thing, int status
 #ifdef PARROT_HAS_BSD_STAT_EXTN
         result = statbuf->st_blocks;
 #else
-        Parrot_ex_throw_from_c_args(interp, NULL, 1,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ARG_OP_NOT_HANDLED,
                     "STAT_PLATFORM_BLOCKS not supported");
 #endif
         break;
@@ -671,10 +683,11 @@ Parrot_file_chroot(PARROT_INTERP, ARGIN(STRING *path))
 {
     char *c_str  = Parrot_str_to_platform_cstring(interp, path);
     int   result = chroot(c_str);
+    int   resul2 = chdir("/");
 
     Parrot_str_free_cstring(c_str);
 
-    if (result)
+    if (result || resul2)
         THROW("chroot");
 }
 

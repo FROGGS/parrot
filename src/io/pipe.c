@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -28,7 +28,7 @@ This file implements the IO_VTABLE for pipes and helper functions.
 
 static void io_pipe_adv_position(PARROT_INTERP,
     ARGMOD_NULLOK(PMC *handle),
-    size_t offset)
+    const size_t offset)
         FUNC_MODIFIES(*handle);
 
 static INTVAL io_pipe_close(PARROT_INTERP, ARGMOD(PMC *handle))
@@ -44,36 +44,34 @@ static INTVAL io_pipe_flush(PARROT_INTERP, ARGMOD(PMC *handle))
 PARROT_CAN_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 static const STR_VTABLE * io_pipe_get_encoding(PARROT_INTERP,
-    ARGIN(PMC *handle))
+    ARGIN(const PMC *handle))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
 
-static INTVAL io_pipe_get_flags(PARROT_INTERP, ARGIN(PMC *handle))
+static INTVAL io_pipe_get_flags(PARROT_INTERP, ARGIN(const PMC *handle))
         __attribute__nonnull__(2);
 
-static PIOHANDLE io_pipe_get_piohandle(PARROT_INTERP, ARGIN(PMC *handle))
+static PIOHANDLE io_pipe_get_piohandle(PARROT_INTERP,
+    ARGIN(const PMC *handle))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
 
 static PIOOFF_T io_pipe_get_position(PARROT_INTERP,
-    ARGMOD_NULLOK(PMC *handle))
-        FUNC_MODIFIES(*handle);
+    ARGIN_NULLOK(const PMC *handle));
 
-static INTVAL io_pipe_is_eof(PARROT_INTERP, ARGMOD(PMC *handle))
+static INTVAL io_pipe_is_eof(PARROT_INTERP, ARGIN(const PMC *handle))
         __attribute__nonnull__(1)
-        __attribute__nonnull__(2)
-        FUNC_MODIFIES(*handle);
+        __attribute__nonnull__(2);
 
-static INTVAL io_pipe_is_open(PARROT_INTERP, ARGMOD(PMC *handle))
+static INTVAL io_pipe_is_open(PARROT_INTERP, ARGIN(const PMC *handle))
         __attribute__nonnull__(1)
-        __attribute__nonnull__(2)
-        FUNC_MODIFIES(*handle);
+        __attribute__nonnull__(2);
 
 static INTVAL io_pipe_open(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    ARGIN(STRING *path),
-    INTVAL flags,
-    ARGIN(STRING *mode))
+    ARGIN(const STRING *path),
+    const INTVAL flags,
+    ARGIN(const STRING *mode))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3)
@@ -83,7 +81,7 @@ static INTVAL io_pipe_open(PARROT_INTERP,
 static INTVAL io_pipe_read_b(PARROT_INTERP,
     ARGMOD(PMC *handle),
     ARGOUT(char *buffer),
-    size_t byte_length)
+    const size_t byte_length)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3)
@@ -92,38 +90,40 @@ static INTVAL io_pipe_read_b(PARROT_INTERP,
 
 static PIOOFF_T io_pipe_seek(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    PIOOFF_T offset,
-    INTVAL whence)
+    const PIOOFF_T offset,
+    const INTVAL whence)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*handle);
 
 static void io_pipe_set_eof(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    INTVAL is_set)
+    const INTVAL is_set)
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*handle);
 
 static void io_pipe_set_flags(PARROT_INTERP,
-    ARGIN(PMC *handle),
-    INTVAL flags)
-        __attribute__nonnull__(2);
-
-static void io_pipe_set_position(PARROT_INTERP,
-    ARGMOD_NULLOK(PMC *handle),
-    PIOOFF_T pos)
-        FUNC_MODIFIES(*handle);
-
-static PIOOFF_T io_pipe_tell(PARROT_INTERP, ARGMOD(PMC *handle))
-        __attribute__nonnull__(1)
+    ARGMOD(PMC *handle),
+    const INTVAL flags)
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*handle);
 
-static size_t io_pipe_total_size(PARROT_INTERP, ARGIN_NULLOK(PMC *handle));
+static void io_pipe_set_position(PARROT_INTERP,
+    ARGMOD_NULLOK(PMC *handle),
+    const PIOOFF_T pos)
+        FUNC_MODIFIES(*handle);
+
+static PIOOFF_T io_pipe_tell(PARROT_INTERP, ARGIN(const PMC *handle))
+        __attribute__nonnull__(1)
+        __attribute__nonnull__(2);
+
+static size_t io_pipe_total_size(PARROT_INTERP,
+    ARGIN_NULLOK(const PMC *handle));
+
 static INTVAL io_pipe_write_b(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    ARGIN(char *buffer),
-    size_t byte_length)
+    ARGIN(const char *buffer),
+    const size_t byte_length)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3)
@@ -181,7 +181,8 @@ static INTVAL io_pipe_write_b(PARROT_INTERP,
 
 /*
 
-=item C<void io_pipe_setup_vtable(PARROT_INTERP, IO_VTABLE *vtable, INTVAL idx)>
+=item C<void io_pipe_setup_vtable(PARROT_INTERP, IO_VTABLE *vtable, const INTVAL
+idx)>
 
 Set up the Pipe IO_VTABLE.
 
@@ -190,7 +191,7 @@ Set up the Pipe IO_VTABLE.
 */
 
 void
-io_pipe_setup_vtable(PARROT_INTERP, ARGMOD_NULLOK(IO_VTABLE *vtable), INTVAL idx)
+io_pipe_setup_vtable(PARROT_INTERP, ARGMOD_NULLOK(IO_VTABLE *vtable), const INTVAL idx)
 {
     ASSERT_ARGS(io_pipe_setup_vtable)
     if (vtable == NULL)
@@ -223,7 +224,7 @@ io_pipe_setup_vtable(PARROT_INTERP, ARGMOD_NULLOK(IO_VTABLE *vtable), INTVAL idx
 /*
 
 =item C<static INTVAL io_pipe_read_b(PARROT_INTERP, PMC *handle, char *buffer,
-size_t byte_length)>
+const size_t byte_length)>
 
 Read up to C<byte_length> bytes from the pipe.
 
@@ -232,7 +233,8 @@ Read up to C<byte_length> bytes from the pipe.
 */
 
 static INTVAL
-io_pipe_read_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGOUT(char *buffer), size_t byte_length)
+io_pipe_read_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGOUT(char *buffer),
+               const size_t byte_length)
 {
     ASSERT_ARGS(io_pipe_read_b)
     const PIOHANDLE os_handle = io_filehandle_get_os_handle(interp, handle);
@@ -248,8 +250,8 @@ io_pipe_read_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGOUT(char *buffer), size_t 
 
 /*
 
-=item C<static INTVAL io_pipe_write_b(PARROT_INTERP, PMC *handle, char *buffer,
-size_t byte_length)>
+=item C<static INTVAL io_pipe_write_b(PARROT_INTERP, PMC *handle, const char
+*buffer, const size_t byte_length)>
 
 Write bytes to the pipe.
 
@@ -258,7 +260,8 @@ Write bytes to the pipe.
 */
 
 static INTVAL
-io_pipe_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(char *buffer), size_t byte_length)
+io_pipe_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const char *buffer),
+                const size_t byte_length)
 {
     ASSERT_ARGS(io_pipe_write_b)
     const PIOHANDLE os_handle = io_filehandle_get_os_handle(interp, handle);
@@ -286,11 +289,12 @@ io_pipe_flush(PARROT_INTERP, ARGMOD(PMC *handle))
 
 /*
 
-=item C<static INTVAL io_pipe_is_eof(PARROT_INTERP, PMC *handle)>
+=item C<static INTVAL io_pipe_is_eof(PARROT_INTERP, const PMC *handle)>
 
 Determine if the pipe thinks it's at the end of input.
 
-=item C<static void io_pipe_set_eof(PARROT_INTERP, PMC *handle, INTVAL is_set)>
+=item C<static void io_pipe_set_eof(PARROT_INTERP, PMC *handle, const INTVAL
+is_set)>
 
 Do nothing.
 
@@ -299,18 +303,18 @@ Do nothing.
 */
 
 static INTVAL
-io_pipe_is_eof(PARROT_INTERP, ARGMOD(PMC *handle))
+io_pipe_is_eof(PARROT_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_is_eof)
     INTVAL flags;
-    GETATTR_FileHandle_flags(interp, handle, flags);
+    GETATTR_FileHandle_flags(interp, (PMC*)handle, flags);
     if (flags & PIO_F_EOF)
         return 1;
     return 0;
 }
 
 static void
-io_pipe_set_eof(SHIM_INTERP, ARGMOD(PMC *handle), INTVAL is_set)
+io_pipe_set_eof(SHIM_INTERP, ARGMOD(PMC *handle), const INTVAL is_set)
 {
     ASSERT_ARGS(io_pipe_set_eof)
     if (is_set)
@@ -321,7 +325,7 @@ io_pipe_set_eof(SHIM_INTERP, ARGMOD(PMC *handle), INTVAL is_set)
 
 /*
 
-=item C<static PIOOFF_T io_pipe_tell(PARROT_INTERP, PMC *handle)>
+=item C<static PIOOFF_T io_pipe_tell(PARROT_INTERP, const PMC *handle)>
 
 Pipes don't keep track of position. Throw an exception.
 
@@ -330,18 +334,18 @@ Pipes don't keep track of position. Throw an exception.
 */
 
 static PIOOFF_T
-io_pipe_tell(PARROT_INTERP, ARGMOD(PMC *handle))
+io_pipe_tell(PARROT_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_tell)
-    const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
+    const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, (PMC*)handle);
     IO_VTABLE_UNIMPLEMENTED(interp, vtable, "tell");
     return (PIOOFF_T)0;
 }
 
 /*
 
-=item C<static PIOOFF_T io_pipe_seek(PARROT_INTERP, PMC *handle, PIOOFF_T
-offset, INTVAL whence)>
+=item C<static PIOOFF_T io_pipe_seek(PARROT_INTERP, PMC *handle, const PIOOFF_T
+offset, const INTVAL whence)>
 
 Pipes don't seek. Throw an exception.
 
@@ -350,7 +354,8 @@ Pipes don't seek. Throw an exception.
 */
 
 static PIOOFF_T
-io_pipe_seek(PARROT_INTERP, ARGMOD(PMC *handle), SHIM(PIOOFF_T offset), SHIM(INTVAL whence))
+io_pipe_seek(PARROT_INTERP, ARGMOD(PMC *handle), SHIM(const PIOOFF_T offset),
+             SHIM(const INTVAL whence))
 {
     ASSERT_ARGS(io_pipe_seek)
     const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
@@ -360,8 +365,8 @@ io_pipe_seek(PARROT_INTERP, ARGMOD(PMC *handle), SHIM(PIOOFF_T offset), SHIM(INT
 
 /*
 
-=item C<static void io_pipe_adv_position(PARROT_INTERP, PMC *handle, size_t
-offset)>
+=item C<static void io_pipe_adv_position(PARROT_INTERP, PMC *handle, const
+size_t offset)>
 
 Pipes don't keep track of position. Ignore.
 
@@ -370,7 +375,7 @@ Pipes don't keep track of position. Ignore.
 */
 
 static void
-io_pipe_adv_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(size_t offset))
+io_pipe_adv_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(const size_t offset))
 {
     ASSERT_ARGS(io_pipe_adv_position)
     UNUSED(handle);
@@ -379,8 +384,8 @@ io_pipe_adv_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(size_t offset
 
 /*
 
-=item C<static void io_pipe_set_position(PARROT_INTERP, PMC *handle, PIOOFF_T
-pos)>
+=item C<static void io_pipe_set_position(PARROT_INTERP, PMC *handle, const
+PIOOFF_T pos)>
 
 Pipes don't keep track of position. Ignore.
 
@@ -389,7 +394,7 @@ Pipes don't keep track of position. Ignore.
 */
 
 static void
-io_pipe_set_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(PIOOFF_T pos))
+io_pipe_set_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(const PIOOFF_T pos))
 {
     ASSERT_ARGS(io_pipe_set_position)
     UNUSED(handle);
@@ -398,7 +403,7 @@ io_pipe_set_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle), SHIM(PIOOFF_T pos)
 
 /*
 
-=item C<static PIOOFF_T io_pipe_get_position(PARROT_INTERP, PMC *handle)>
+=item C<static PIOOFF_T io_pipe_get_position(PARROT_INTERP, const PMC *handle)>
 
 Pipes don't keep track of position. Return 0.
 
@@ -407,7 +412,7 @@ Pipes don't keep track of position. Return 0.
 */
 
 static PIOOFF_T
-io_pipe_get_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle))
+io_pipe_get_position(SHIM_INTERP, ARGIN_NULLOK(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_get_position)
     UNUSED(handle);
@@ -417,8 +422,8 @@ io_pipe_get_position(SHIM_INTERP, ARGMOD_NULLOK(PMC *handle))
 
 /*
 
-=item C<static INTVAL io_pipe_open(PARROT_INTERP, PMC *handle, STRING *path,
-INTVAL flags, STRING *mode)>
+=item C<static INTVAL io_pipe_open(PARROT_INTERP, PMC *handle, const STRING
+*path, const INTVAL flags, const STRING *mode)>
 
 Open the pipe with the command in C<path>.
 
@@ -427,8 +432,8 @@ Open the pipe with the command in C<path>.
 */
 
 static INTVAL
-io_pipe_open(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *path), INTVAL flags,
-        ARGIN(STRING *mode))
+io_pipe_open(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const STRING *path),
+             const INTVAL flags, ARGIN(const STRING *mode))
 {
     ASSERT_ARGS(io_pipe_open)
 
@@ -440,8 +445,8 @@ io_pipe_open(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *path), INTVAL fla
     /* Hack! If we're opening in file mode, turn this FileHandle into a file
        and use that vtable instead. */
     if ((flags & PIO_F_PIPE) == 0) {
-        const IO_VTABLE * const vtable = Parrot_io_get_vtable(interp, IO_VTABLE_FILEHANDLE, NULL);
-        VTABLE_set_pointer_keyed_int(interp, handle, IO_PTR_IDX_VTABLE, (void *)vtable);
+        const IO_VTABLE * vtable = Parrot_io_get_vtable(interp, IO_VTABLE_FILEHANDLE, NULL);
+        VTABLE_set_pointer_keyed_int(interp, handle, IO_PTR_IDX_VTABLE, (void *)PTR2INTVAL(vtable));
         return vtable->open(interp, handle, path, flags, mode);
     }
 
@@ -459,8 +464,8 @@ io_pipe_open(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *path), INTVAL fla
 
     SETATTR_FileHandle_os_handle(interp, handle, os_handle);
     SETATTR_FileHandle_flags(interp, handle, flags);
-    SETATTR_FileHandle_filename(interp, handle, path);
-    SETATTR_FileHandle_mode(interp, handle, mode);
+    SETATTR_FileHandle_filename(interp, handle, (STRING*)path);
+    SETATTR_FileHandle_mode(interp, handle, (STRING*)mode);
     SETATTR_FileHandle_file_pos(interp, handle, 0);
 
     return 1;
@@ -468,7 +473,7 @@ io_pipe_open(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *path), INTVAL fla
 
 /*
 
-=item C<static INTVAL io_pipe_is_open(PARROT_INTERP, PMC *handle)>
+=item C<static INTVAL io_pipe_is_open(PARROT_INTERP, const PMC *handle)>
 
 Determine if the pipe is currently open.
 
@@ -477,7 +482,7 @@ Determine if the pipe is currently open.
 */
 
 static INTVAL
-io_pipe_is_open(PARROT_INTERP, ARGMOD(PMC *handle))
+io_pipe_is_open(PARROT_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_is_open)
     const PIOHANDLE os_handle = io_filehandle_get_os_handle(interp, handle);
@@ -518,7 +523,7 @@ io_pipe_close(PARROT_INTERP, ARGMOD(PMC *handle))
 
 /*
 
-=item C<static const STR_VTABLE * io_pipe_get_encoding(PARROT_INTERP, PMC
+=item C<static const STR_VTABLE * io_pipe_get_encoding(PARROT_INTERP, const PMC
 *handle)>
 
 Get the encoding used by the pipe.
@@ -530,12 +535,12 @@ Get the encoding used by the pipe.
 PARROT_CAN_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 static const STR_VTABLE *
-io_pipe_get_encoding(PARROT_INTERP, ARGIN(PMC *handle))
+io_pipe_get_encoding(PARROT_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_get_encoding)
     STRING           *encoding_str;
 
-    GETATTR_FileHandle_encoding(interp, handle, encoding_str);
+    GETATTR_FileHandle_encoding(interp, (PMC*)handle, encoding_str);
     if (!STRING_IS_NULL(encoding_str))
         return Parrot_find_encoding_by_string(interp, encoding_str);
     return NULL;
@@ -543,7 +548,8 @@ io_pipe_get_encoding(PARROT_INTERP, ARGIN(PMC *handle))
 
 /*
 
-=item C<static void io_pipe_set_flags(PARROT_INTERP, PMC *handle, INTVAL flags)>
+=item C<static void io_pipe_set_flags(PARROT_INTERP, PMC *handle, const INTVAL
+flags)>
 
 Set flags on the Pipe.
 
@@ -552,7 +558,7 @@ Set flags on the Pipe.
 */
 
 static void
-io_pipe_set_flags(SHIM_INTERP, ARGIN(PMC *handle), INTVAL flags)
+io_pipe_set_flags(SHIM_INTERP, ARGMOD(PMC *handle), const INTVAL flags)
 {
     ASSERT_ARGS(io_pipe_set_flags)
     PARROT_FILEHANDLE(handle)->flags = flags;
@@ -560,7 +566,7 @@ io_pipe_set_flags(SHIM_INTERP, ARGIN(PMC *handle), INTVAL flags)
 
 /*
 
-=item C<static INTVAL io_pipe_get_flags(PARROT_INTERP, PMC *handle)>
+=item C<static INTVAL io_pipe_get_flags(PARROT_INTERP, const PMC *handle)>
 
 Get the flags from the pipe.
 
@@ -569,7 +575,7 @@ Get the flags from the pipe.
 */
 
 static INTVAL
-io_pipe_get_flags(SHIM_INTERP, ARGIN(PMC *handle))
+io_pipe_get_flags(SHIM_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_get_flags)
     return PARROT_FILEHANDLE(handle)->flags;
@@ -577,7 +583,7 @@ io_pipe_get_flags(SHIM_INTERP, ARGIN(PMC *handle))
 
 /*
 
-=item C<static size_t io_pipe_total_size(PARROT_INTERP, PMC *handle)>
+=item C<static size_t io_pipe_total_size(PARROT_INTERP, const PMC *handle)>
 
 Pipes have an unknown total size.
 
@@ -586,7 +592,7 @@ Pipes have an unknown total size.
 */
 
 static size_t
-io_pipe_total_size(SHIM_INTERP, ARGIN_NULLOK(PMC *handle))
+io_pipe_total_size(SHIM_INTERP, ARGIN_NULLOK(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_total_size)
     UNUSED(handle);
@@ -595,7 +601,8 @@ io_pipe_total_size(SHIM_INTERP, ARGIN_NULLOK(PMC *handle))
 
 /*
 
-=item C<static PIOHANDLE io_pipe_get_piohandle(PARROT_INTERP, PMC *handle)>
+=item C<static PIOHANDLE io_pipe_get_piohandle(PARROT_INTERP, const PMC
+*handle)>
 
 Get the stream descriptor for the pipe.
 
@@ -604,7 +611,7 @@ Get the stream descriptor for the pipe.
 */
 
 static PIOHANDLE
-io_pipe_get_piohandle(PARROT_INTERP, ARGIN(PMC *handle))
+io_pipe_get_piohandle(PARROT_INTERP, ARGIN(const PMC *handle))
 {
     ASSERT_ARGS(io_pipe_get_piohandle)
     return io_filehandle_get_os_handle(interp, handle);

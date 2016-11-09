@@ -647,7 +647,7 @@ try_rev_cmp(ARGIN(const char *name), ARGMOD(SymReg **r))
             const int to_swap = br_pairs[i].to_swap;
             SymReg *t;
 
-            if (r[to_swap + 1]->set == 'P')
+            if (!r[to_swap + 1] || r[to_swap + 1]->set == 'P')
                 return NULL;
 
             t              = r[to_swap];
@@ -664,8 +664,8 @@ try_rev_cmp(ARGIN(const char *name), ARGMOD(SymReg **r))
 
 /*
 
-=item C<int imcc_vfprintf(imc_info_t * imcc, PMC *io, const char *format,
-va_list ap)>
+=item C<int imcc_vfprintf(imc_info_t * imcc, PMC *io, ARGIN_FORMAT(const char
+*format), va_list ap)>
 
 Formats a given series of arguments per a given format string and prints it to
 the given Parrot IO PMC.
@@ -677,10 +677,10 @@ the given Parrot IO PMC.
 PARROT_IGNORABLE_RESULT
 int
 imcc_vfprintf(ARGMOD(imc_info_t * imcc), ARGMOD(PMC *io),
-        ARGIN(const char *format), va_list ap)
+        ARGIN_FORMAT(const char *format), va_list ap)
 {
     ASSERT_ARGS(imcc_vfprintf)
-    return Parrot_io_putps(imcc->interp, io, Parrot_vsprintf_c(imcc->interp, format, ap));
+    return Parrot_io_write_s(imcc->interp, io, Parrot_vsprintf_c(imcc->interp, format, ap));
 }
 
 /*

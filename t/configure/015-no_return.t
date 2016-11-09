@@ -10,7 +10,7 @@ use Carp;
 use lib qw( lib t/configure/testlib );
 use Parrot::Configure;
 use Parrot::Configure::Options qw( process_options );
-use IO::CaptureOutput qw | capture |;
+use Parrot::Configure::Utils qw( capture );
 
 $| = 1;
 is( $|, 1, "output autoflush is set" );
@@ -49,7 +49,7 @@ $conf->options->set(%args);
 {
     my $rv;
     my $stdout;
-    capture ( sub {$rv    = $conf->runsteps}, \$stdout );
+    capture ( sub {$rv = $conf->runsteps}, \$stdout );
     ok( $rv, "runsteps successfully ran $step" );
     like( $stdout, qr/$description/s, "Got correct description for $step" );
     like( $stdout, qr/done\.\z/,      "got 'done' in lieu of result set by step" );

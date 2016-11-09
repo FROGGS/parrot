@@ -42,15 +42,24 @@ is_deeply(  [grep {
         [],
         'MANIFEST.generated contains no irregular records' );
 
-# check for appropriate contents
-my %contained_files = map {$$_[0] => 1} @records;
-is_deeply(  [],
-        [grep {not exists $contained_files{$_}} glob('include/pmc/*.h')],
-        'MANIFEST.generated lists all core PMC headers' );
+# Check for appropriate contents
+my %contained_files = map  { $_->[0] => 1 } @records;
+my @missing_headers = grep {!$contained_files{$_}} glob('include/pmc/*.h');
+my @missing_dumps   = grep {!$contained_files{$_}} glob('src/pmc/*.dump');
 
-is_deeply(  [],
-        [grep {not exists $contained_files{$_}} glob('src/pmc/*.dump')],
-        'MANIFEST.generated lists all core PMC dump files' )
+# Note that a failure of only 'include/pmc/pmc_default.h' means
+# that `make clean` and `make realclean` are failing to
+# remove 'include/pmc/pmc_default.h', so it does not get rebuilt,
+# and therefore is not added to 'MANIFEST.generated'. This is a bug
+# that needs fixing, but in the meantime, either remove
+# 'include/pmc/pmc_default.h' after `make realclean`, or use
+# `git clean -dnx` and `git clean -dfx`.
+# See https://github.com/parrot/parrot/issues/1206
+ok( !@missing_headers, 'MANIFEST.generated lists all core PMC headers' )
+    or diag( join "\n\t", 'Missing:', @missing_headers);
+
+ok( !@missing_dumps, 'MANIFEST.generated lists all core PMC dump files' )
+    or diag( join "\n\t", 'Missing:', @missing_dumps);
 
 # Local Variables:
 #   mode: cperl

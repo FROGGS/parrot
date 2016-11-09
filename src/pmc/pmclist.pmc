@@ -571,7 +571,7 @@ Parrot_pmc_list_insert_by_number(PARROT_INTERP, PMC *list, PMC *value)
 
 =item C<static void throw_pop_empty(PARROT_INTERP)>
 
-Throws with the appropiate message.
+Throws with the appropriate message.
 
 =cut
 
@@ -582,8 +582,8 @@ static void
 throw_shift_empty(PARROT_INTERP)
 {
     ASSERT_ARGS(throw_shift_empty)
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_OUT_OF_BOUNDS,
-            "PMCList: Can't shift from an empty list!");
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
+            "Can't shift from an empty list");
 }
 
 PARROT_DOES_NOT_RETURN
@@ -591,8 +591,8 @@ static void
 throw_pop_empty(PARROT_INTERP)
 {
     ASSERT_ARGS(throw_pop_empty)
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_OUT_OF_BOUNDS,
-            "PMCList: Can't pop from an empty list!");
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
+            "Can't pop from an empty list");
 }
 
 /*

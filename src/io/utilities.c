@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2012, Parrot Foundation.
+Copyright (C) 2001-2016, Parrot Foundation.
 
 =head1 NAME
 
@@ -159,8 +159,9 @@ C<flags>. C<flags> can be one of C<PIO_F_READ> or C<PIO_F_WRITE>. This
 function throws an exception if this handle is closed or if it is not open
 for the specified mode.
 
-There is an exception that certain types are flagged C<PIO_VF_ALWAYS_READABLE>
+There is an exception that certain types are flagged C<PIO_VF_AWAYS_READABLE>
 on the vtable. Those types are always readable, so take that into account.
+But this behavior for the StringHandle PMC was deprecated with 8.2.0.
 
 =cut
 
@@ -172,22 +173,32 @@ io_verify_is_open_for(PARROT_INTERP, ARGIN(PMC *handle),
 {
     ASSERT_ARGS(io_verify_is_open_for)
 
+    /* Deprecated with 8.2.0, removed with 8.3.0 */
     /* Some types like StringHandle are always readable, even if only opened
        in 'w' mode or when closed. Several parts of the build, test suite and
        libraries depend on this. */
-    if (vtable->flags & PIO_VF_AWAYS_READABLE) {
-        if (flags == PIO_F_READ)
-            return;
-        else
-            flags &= ~PIO_F_READ;
-    }
+    /* DONE: fixed those places: opsc, winxed, ... */
 
-    if (Parrot_io_is_closed(interp, handle))
+    if (Parrot_io_is_closed(interp, handle)) {
+#if PARROT_MAJOR_VERSION <= 8 || (PARROT_MAJOR_VERSION == 8 && PARROT_MINOR_VERSION < 3)
+        if (vtable->flags & PIO_VF_AWAYS_READABLE) {
+            Parrot_warn_deprecated(interp, "StringHandle auto-reopen is deprecated with 8.2.0");
+            return;
+        }
+#endif
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
                 "IO PMC %s is not open", vtable->name);
-    if ((vtable->get_flags(interp, handle) & flags) == 0)
+    }
+    if ((vtable->get_flags(interp, handle) & flags) == 0) {
+#if PARROT_MAJOR_VERSION <= 8 || (PARROT_MAJOR_VERSION == 8 && PARROT_MINOR_VERSION < 3)
+        if (vtable->flags & PIO_VF_AWAYS_READABLE) {
+            Parrot_warn_deprecated(interp, "StringHandle auto-read is deprecated with 8.2.0");
+            return;
+        }
+#endif
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
                 "IO PMC %s is not in mode %d", vtable->name, flags);
+    }
 }
 
 /*
@@ -225,8 +236,8 @@ io_verify_has_read_buffer(PARROT_INTERP, ARGIN(PMC *handle),
 
 /*
 
-=item C<STRING * io_verify_string_encoding(PARROT_INTERP, PMC *handle, const
-IO_VTABLE *vtable, STRING *s, INTVAL flags)>
+=item C<STRING * io_verify_string_encoding(PARROT_INTERP, const PMC *handle,
+const IO_VTABLE *vtable, const STRING *s, const INTVAL flags)>
 
 Verify that the given string C<s> has a suitable encoding for use with
 C<handle>. If not, re-encode the string to be compatible. Return a string that
@@ -239,8 +250,8 @@ is compatible with C<handle>.
 PARROT_CANNOT_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 STRING *
-io_verify_string_encoding(PARROT_INTERP, ARGIN(PMC *handle),
-        ARGIN(const IO_VTABLE *vtable), ARGIN(STRING *s), INTVAL flags)
+io_verify_string_encoding(PARROT_INTERP, ARGIN(const PMC *handle),
+        ARGIN(const IO_VTABLE *vtable), ARGIN(const STRING *s), const INTVAL flags)
 {
     ASSERT_ARGS(io_verify_string_encoding)
     const STR_VTABLE * const encoding = io_get_encoding(interp, handle, vtable, flags);
@@ -248,7 +259,7 @@ io_verify_string_encoding(PARROT_INTERP, ARGIN(PMC *handle),
     /* If we still don't have an encoding or if we don't need to do any
        converting, we're good. Return. */
     if (encoding == NULL || encoding == s->encoding || encoding == Parrot_binary_encoding_ptr)
-        return s;
+        return (STRING*)s;
 
     /* Else, convert to the necessary encoding */
     return encoding->to_encoding(interp, s);
@@ -343,7 +354,7 @@ io_read_encoded_string(PARROT_INTERP, ARGMOD(PMC *handle),
 /*
 
 =item C<void io_read_chars_append_string(PARROT_INTERP, STRING * s, PMC *handle,
-const IO_VTABLE *vtable, IO_BUFFER *buffer, size_t byte_length)>
+const IO_VTABLE *vtable, IO_BUFFER *buffer, const size_t byte_length)>
 
 Read characters out of the buffer and append them to the end of the existing
 STRING. The STRING should be in "edit" mode and should not be referenced
@@ -361,7 +372,7 @@ byte_length are characters which are discarded).
 void
 io_read_chars_append_string(PARROT_INTERP, ARGMOD(STRING * s),
         ARGMOD(PMC *handle), ARGIN(const IO_VTABLE *vtable),
-        ARGMOD_NULLOK(IO_BUFFER *buffer), size_t byte_length)
+        ARGMOD_NULLOK(IO_BUFFER *buffer), const size_t byte_length)
 {
     ASSERT_ARGS(io_read_chars_append_string)
     const size_t alloc_size = s->bufused + byte_length;
@@ -461,8 +472,8 @@ io_readline_encoded_string(PARROT_INTERP, ARGMOD(PMC *handle),
 
 /*
 
-=item C<const STR_VTABLE * io_get_encoding(PARROT_INTERP, PMC *handle, const
-IO_VTABLE *vtable, INTVAL flags)>
+=item C<const STR_VTABLE * io_get_encoding(PARROT_INTERP, const PMC *handle,
+const IO_VTABLE *vtable, const INTVAL flags)>
 
 Get the encoding of C<handle>. If C<handle> doesn't have an encoding specified
 pick one that this suitable for the operation described in C<flags>. If
@@ -476,7 +487,8 @@ If C<flags> is PIO_F_READ, return the platform default encoding.
 PARROT_CANNOT_RETURN_NULL
 PARROT_WARN_UNUSED_RESULT
 const STR_VTABLE *
-io_get_encoding(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const IO_VTABLE *vtable), INTVAL flags)
+io_get_encoding(PARROT_INTERP, ARGIN(const PMC *handle), ARGIN(const IO_VTABLE *vtable),
+                const INTVAL flags)
 {
     ASSERT_ARGS(io_get_encoding)
     const STR_VTABLE * const encoding = vtable->get_encoding(interp, handle);

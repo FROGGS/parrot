@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2016, Parrot Foundation.
 
 =head1 NAME
 
@@ -93,14 +93,14 @@ Parrot_io_init(PARROT_INTERP)
 
     interp->piodata = mem_gc_allocate_zeroed_typed(interp, ParrotIOData);
     if (interp->piodata == NULL)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
-            "PIO alloc piodata failure.");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
+            "PIO alloc piodata failure");
     interp->piodata->table         =
             mem_gc_allocate_n_zeroed_typed(interp, PIO_NR_OPEN, PMC *);
 
     if (!interp->piodata->table)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
-            "PIO alloc table failure.");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
+            "PIO alloc table failure");
 }
 
 void
@@ -154,6 +154,7 @@ Parrot_io_allocate_new_vtable(PARROT_INTERP, ARGIN(const char *name))
     return vtable;
 }
 
+PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CAN_RETURN_NULL
 const IO_VTABLE *
@@ -167,7 +168,7 @@ Parrot_io_get_vtable(PARROT_INTERP, INTVAL idx, ARGIN_NULLOK(const char * name))
     if (idx >= 0)
         return &(interp->piodata->vtables[idx]);
     if (!name)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Cannot get IO VTABLE with no index and no name");
 
     for (i = 0; i < interp->piodata->num_vtables; i++) {
@@ -296,6 +297,7 @@ Legacy wrapper for Parrot_io_open(). Do not use. This is deprecated.
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 PMC *
 Parrot_io_open_handle(PARROT_INTERP, ARGIN(PMC *pmc), ARGIN(STRING *path),
         ARGIN(STRING *mode))
@@ -335,7 +337,6 @@ Parrot_io_open(PARROT_INTERP, ARGIN(PMC *pmc), ARGIN(STRING *path),
 
     {
         const INTVAL flags = Parrot_io_parse_open_flags(interp, mode);
-        IO_BUFFER * const read_buffer = IO_GET_READ_BUFFER(interp, handle);
         INTVAL status = vtable->open(interp, handle, path, flags, mode);
 
         if (!status)
@@ -376,13 +377,13 @@ Legacy wrapper function for Parrot_io_socket. This is deprecated, do not use.
 
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
-PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 INTVAL
 Parrot_io_socket_handle(PARROT_INTERP, ARGMOD_NULLOK(PMC *socket), INTVAL fam,
             INTVAL type, INTVAL proto)
 {
     ASSERT_ARGS(Parrot_io_socket_handle)
-    (void)Parrot_io_socket(interp, socket, fam, type, proto);
+    socket = Parrot_io_socket(interp, socket, fam, type, proto);
     /* For historical reasons, this function always returns 0 to signal
        unconditional success */
     return 0;
@@ -526,13 +527,14 @@ is delivered.
 
 =item C<INTVAL Parrot_io_close_handle(PARROT_INTERP, PMC *pmc)>
 
-Legacy wrapper for Parrot_io_close. Deprecated. Do not use.
+Legacy wrapper for C<Parrot_io_close>. Deprecated. Do not use.
 
 =cut
 
 */
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 INTVAL
 Parrot_io_close_handle(PARROT_INTERP, ARGMOD(PMC *pmc))
 {
@@ -559,7 +561,7 @@ Parrot_io_close(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL autoflush)
         /* TODO: We need to better-document the autoflush values, and maybe
            turn it into an enum or a series of typedefs */
         if (autoflush == -1)
-            autoflush == (vtable->flags & PIO_VF_FLUSH_ON_CLOSE) ? 1 : 0;
+            autoflush = (vtable->flags & PIO_VF_FLUSH_ON_CLOSE) ? 1 : 0;
         if (autoflush == 1)
             vtable->flush(interp, handle);
         return vtable->close(interp, handle);
@@ -611,6 +613,7 @@ Parrot_io_flush instead.
 */
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 void
 Parrot_io_flush_handle(PARROT_INTERP, ARGMOD(PMC *pmc))
 {
@@ -628,7 +631,7 @@ Parrot_io_flush(PARROT_INTERP, ARGMOD(PMC *handle))
         return 0;
 
     if (Parrot_io_is_closed(interp, handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Cannot flush a closed handle");
 
     else {
@@ -657,11 +660,11 @@ required for multi-byte encodings.
 
 =item C<STRING * Parrot_io_reads(PARROT_INTERP, PMC *pmc, size_t length)>
 
-This is a legacy wrapper for Parrot_io_read_s. Do not use. This is deprecated.
+This is a legacy wrapper for C<Parrot_io_read_s>. Do not use. This is deprecated.
 
 =item C<STRING * Parrot_io_recv_handle(PARROT_INTERP, PMC *pmc, size_t len)>
 
-A legacy wrapper around Parrot_io_read_s, typically used for sockets.
+A legacy wrapper around C<Parrot_io_read_s>, typically used for sockets.
 Deprecated. Do not use.
 
 =cut
@@ -671,6 +674,7 @@ Deprecated. Do not use.
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING *
 Parrot_io_reads(PARROT_INTERP, ARGMOD(PMC *pmc), size_t length)
 {
@@ -687,7 +691,7 @@ Parrot_io_read_s(PARROT_INTERP, ARGMOD(PMC *handle), size_t length)
     ASSERT_ARGS(Parrot_io_read_s)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to read from null or invalid PMC");
 
     if (!length)
@@ -695,11 +699,12 @@ Parrot_io_read_s(PARROT_INTERP, ARGMOD(PMC *handle), size_t length)
 
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
-        IO_BUFFER * read_buffer = IO_GET_READ_BUFFER(interp, handle);
+        IO_BUFFER *       read_buffer  = IO_GET_READ_BUFFER(interp, handle);
         IO_BUFFER * const write_buffer = IO_GET_WRITE_BUFFER(interp, handle);
-        const STR_VTABLE * encoding = vtable->get_encoding(interp, handle);
+        const STR_VTABLE * encoding    = vtable->get_encoding(interp, handle);
         STRING * s;
 
+        Parrot_block_GC_move(interp); /* Our local strings may not move away. GH #1196 */
         /* read_s requires us to read in a whole number of characters, which
            might be multi-byte. This requires a read buffer. */
         /* TODO: If we have a fixed8 encoding or similar, we should be able to
@@ -712,12 +717,14 @@ Parrot_io_read_s(PARROT_INTERP, ARGMOD(PMC *handle), size_t length)
 
         s = io_read_encoded_string(interp, handle, vtable, read_buffer, encoding, length);
         PARROT_ASSERT(s->strlen <= length);
+        Parrot_unblock_GC_move(interp);
         return s;
     }
 }
 
 PARROT_EXPORT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING *
 Parrot_io_recv_handle(PARROT_INTERP, ARGMOD(PMC *pmc), size_t len)
 {
@@ -749,7 +756,7 @@ Parrot_io_readall_s(PARROT_INTERP, ARGMOD(PMC *handle))
     ASSERT_ARGS(Parrot_io_readall_s)
     const IO_VTABLE * vtable;
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to read from null or invalid PMC");
 
     vtable = IO_GET_VTABLE(interp, handle);
@@ -822,7 +829,7 @@ Parrot_io_read_byte_buffer_pmc(PARROT_INTERP, ARGMOD(PMC *handle),
     ASSERT_ARGS(Parrot_io_read_byte_buffer_pmc)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to read bytes from a null or invalid PMC");
 
     if (PMC_IS_NULL(buffer))
@@ -833,7 +840,7 @@ Parrot_io_read_byte_buffer_pmc(PARROT_INTERP, ARGMOD(PMC *handle),
 
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
-        IO_BUFFER * const read_buffer = IO_GET_READ_BUFFER(interp, handle);
+        IO_BUFFER * const read_buffer  = IO_GET_READ_BUFFER(interp, handle);
         IO_BUFFER * const write_buffer = IO_GET_WRITE_BUFFER(interp, handle);
         size_t bytes_read;
         char * content;
@@ -879,7 +886,7 @@ Parrot_io_write_byte_buffer_pmc(PARROT_INTERP, ARGMOD(PMC * handle),
     ASSERT_ARGS(Parrot_io_write_byte_buffer_pmc)
 
     if (PMC_IS_NULL(buffer))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to read bytes from a null or invalid ByteBuffer");
 
     if (!byte_length)
@@ -910,7 +917,7 @@ automatically allocate a buffer for multi-byte encoded strings.
 
 =item C<STRING * Parrot_io_readline(PARROT_INTERP, PMC *handle)>
 
-Legacy wrapper for Parrot_io_readline_s. Deprecated. Do not use.
+Legacy wrapper for C<Parrot_io_readline_s>. Deprecated. Do not use.
 
 =cut
 
@@ -919,6 +926,7 @@ Legacy wrapper for Parrot_io_readline_s. Deprecated. Do not use.
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING *
 Parrot_io_readline(PARROT_INTERP, ARGMOD(PMC *handle))
 {
@@ -939,7 +947,7 @@ Parrot_io_readline_s(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING * terminat
     ASSERT_ARGS(Parrot_io_readline_s)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to read bytes from a null or invalid PMC");
 
     if (STRING_IS_NULL(terminator) || STRING_length(terminator) == 0)
@@ -951,9 +959,6 @@ Parrot_io_readline_s(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING * terminat
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
         IO_BUFFER * read_buffer = IO_GET_READ_BUFFER(interp, handle);
         IO_BUFFER * const write_buffer = IO_GET_WRITE_BUFFER(interp, handle);
-        INTVAL flags = Parrot_io_get_flags(interp, handle);
-        size_t bytes_read;
-        STRING *result;
         size_t max_delimiter_byte_size = 0;
 
         io_sync_buffers_for_read(interp, handle, vtable, read_buffer, write_buffer);
@@ -988,17 +993,11 @@ C<pmc> must be a valid handle type and must be opened for writing.
 If the handle has a buffer set up, the data may be written to the buffer and
 not written out to the handle, depending on settings.
 
-=item C<INTVAL Parrot_io_write_handle(PARROT_INTERP, PMC *pmc, const void
-*buffer, size_t length)>
-
-Legacy wrapper for Parrot_io_write_b. Deprecated. Do not use.
-
 =cut
 
 */
 
 PARROT_EXPORT
-PARROT_WARN_UNUSED_RESULT
 size_t
 Parrot_io_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const void *buffer),
         size_t byte_length)
@@ -1006,7 +1005,7 @@ Parrot_io_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const void *buffer),
     ASSERT_ARGS(Parrot_io_write_b)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to write bytes to a null or invalid PMC");
 
     if (!byte_length)
@@ -1021,7 +1020,7 @@ Parrot_io_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const void *buffer),
         io_verify_is_open_for(interp, handle, vtable, PIO_F_WRITE);
         io_sync_buffers_for_write(interp, handle, vtable, read_buffer, write_buffer);
         bytes_written = Parrot_io_buffer_write_b(interp, write_buffer, handle, vtable,
-                                                 (char *)buffer, byte_length);
+                                                 (char *)PTR2INTVAL(buffer), byte_length);
         vtable->adv_position(interp, handle, bytes_written);
 
         /* If we are writing to a r/w handle, advance the pointer in the
@@ -1033,7 +1032,8 @@ Parrot_io_write_b(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const void *buffer),
 
 /*
 
-=item C<INTVAL Parrot_io_write_s(PARROT_INTERP, PMC *handle, STRING *s)>
+=item C<INTVAL Parrot_io_write_s(PARROT_INTERP, PMC *handle, const STRING *
+const s)>
 
 Write Parrot C<STRING*> C<s> to the handle C<handle>. C<s> may be re-encoded
 to match the specified encoding for C<handle>. If the C<handle> has a write
@@ -1049,12 +1049,12 @@ Returns the total number of bytes written.
 
 PARROT_EXPORT
 INTVAL
-Parrot_io_write_s(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *s))
+Parrot_io_write_s(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(const STRING * const s))
 {
     ASSERT_ARGS(Parrot_io_write_s)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Attempt to write a string to a null or invalid PMC");
 
     if (STRING_IS_NULL(s) || STRING_length(s) == 0)
@@ -1063,17 +1063,19 @@ Parrot_io_write_s(PARROT_INTERP, ARGMOD(PMC *handle), ARGIN(STRING *s))
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
         IO_BUFFER * const write_buffer = IO_GET_WRITE_BUFFER(interp, handle);
-        IO_BUFFER * const read_buffer = IO_GET_READ_BUFFER(interp, handle);
+        IO_BUFFER * const read_buffer  = IO_GET_READ_BUFFER(interp, handle);
         STRING *out_s;
         size_t bytes_written;
 
         io_verify_is_open_for(interp, handle, vtable, PIO_F_WRITE);
+
+        Parrot_block_GC_sweep(interp); /* Our local string may not move away. GH #1196 */
         io_sync_buffers_for_write(interp, handle, vtable, read_buffer, write_buffer);
         out_s = io_verify_string_encoding(interp, handle, vtable, s, PIO_F_WRITE);
-
         bytes_written = Parrot_io_buffer_write_b(interp, write_buffer, handle,
                                     vtable, out_s->strstart, out_s->bufused);
         vtable->adv_position(interp, handle, bytes_written);
+        Parrot_unblock_GC_sweep(interp);
 
         /* If we are writing to a r/w handle, advance the pointer in the
            associated read-buffer since we're overwriting those characters. */
@@ -1223,7 +1225,9 @@ Parrot_io_peek(PARROT_INTERP, ARGMOD(PMC *handle))
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
         IO_BUFFER * const read_buffer = IO_GET_READ_BUFFER(interp, handle);
-        const INTVAL c = Parrot_io_buffer_peek(interp, read_buffer, handle, vtable);
+        INTVAL c;
+        io_verify_is_open_for(interp, handle, vtable, PIO_F_READ);
+        c = Parrot_io_buffer_peek(interp, read_buffer, handle, vtable);
 
         if (c == -1)
             return STRINGNULL;
@@ -1234,7 +1238,7 @@ Parrot_io_peek(PARROT_INTERP, ARGMOD(PMC *handle))
 
 /*
 
-=item C<INTVAL Parrot_io_eof(PARROT_INTERP, PMC *handle)>
+=item C<INTVAL Parrot_io_eof(PARROT_INTERP, const PMC * const handle)>
 
 Returns C<1> if the C<handle> is at end-of-file (or the type-specific
 equivalent). Returns C<1> if the handle is null, closed, or otherwise not
@@ -1250,21 +1254,19 @@ handle is not considered to be at EOF.
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 INTVAL
-Parrot_io_eof(PARROT_INTERP, ARGMOD(PMC *handle))
+Parrot_io_eof(PARROT_INTERP, ARGIN(const PMC * const handle))
 {
     ASSERT_ARGS(Parrot_io_eof)
-    INTVAL flags, result;
-
     /* io could be null here, but rather than return a negative error
      * we just fake EOF since eof test is usually in a boolean context.
      */
     if (PMC_IS_NULL(handle))
         return 1;
-    if (Parrot_io_is_closed(interp, handle))
+    if (Parrot_io_is_closed(interp, (PMC*)handle))
         return 1;
     {
-        IO_BUFFER * const buffer = IO_GET_READ_BUFFER(interp, handle);
-        const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
+        IO_BUFFER * const buffer = IO_GET_READ_BUFFER(interp, (PMC*)handle);
+        const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, (PMC*)handle);
         if (buffer)
             return BUFFER_IS_EMPTY(buffer) && vtable->is_eof(interp, handle);
         return vtable->is_eof(interp, handle);
@@ -1273,45 +1275,50 @@ Parrot_io_eof(PARROT_INTERP, ARGMOD(PMC *handle))
 
 /*
 
-=item C<INTVAL Parrot_io_puts(PARROT_INTERP, PMC *pmc, const char *s)>
+=item C<INTVAL Parrot_io_puts(PARROT_INTERP, const PMC * const pmc, const char
+*s)>
 
-Legacy wrapper for Parrot_io_write_b. Deprecated. Do not use
+Legacy wrapper for C<Parrot_io_write_b>. Deprecated. Do not use
 
 =cut
 
 */
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 INTVAL
-Parrot_io_puts(PARROT_INTERP, ARGMOD(PMC *pmc), ARGIN(const char *s))
+Parrot_io_puts(PARROT_INTERP, ARGIN(const PMC * const pmc), ARGIN(const char *s))
 {
     ASSERT_ARGS(Parrot_io_puts)
-    return Parrot_io_write_b(interp, pmc, s, strlen(s));
+    return Parrot_io_write_b(interp, (PMC*)pmc, s, strlen(s));
 }
 
 /*
 
-=item C<INTVAL Parrot_io_putps(PARROT_INTERP, PMC *pmc, STRING *s)>
+=item C<INTVAL Parrot_io_putps(PARROT_INTERP, const PMC * const pmc, const
+STRING * const s)>
 
-Legacy Wrapper for Parrot_io_write_s. Deprecated. Do not use.
+Legacy Wrapper for C<Parrot_io_write_s>. Deprecated. Do not use.
 
 =cut
 
 */
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 INTVAL
-Parrot_io_putps(PARROT_INTERP, ARGMOD(PMC *pmc), ARGMOD(STRING *s))
+Parrot_io_putps(PARROT_INTERP, ARGIN(const PMC * const pmc), ARGIN(const STRING * const s))
 {
     ASSERT_ARGS(Parrot_io_putps)
-    return Parrot_io_write_s(interp, pmc, s);
+    return Parrot_io_write_s(interp, (PMC*)pmc, s);
 }
 
 /*
 
-=item C<INTVAL Parrot_io_fprintf(PARROT_INTERP, PMC *pmc, const char *s, ...)>
+=item C<INTVAL Parrot_io_fprintf(PARROT_INTERP, const PMC * const pmc,
+ARGIN_FORMAT(const char *s), ...)>
 
-Writes a C string format with varargs to C<*pmc>. Uses Parrot_io_write_s to
+Writes a C string format with varargs to C<*pmc>. Uses C<Parrot_io_write_s> to
 write the formatted string, and is subject to all the limitations thereof.
 
 =cut
@@ -1321,19 +1328,17 @@ write the formatted string, and is subject to all the limitations thereof.
 PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL
-Parrot_io_fprintf(PARROT_INTERP, ARGMOD(PMC *pmc), ARGIN(const char *s), ...)
+Parrot_io_fprintf(PARROT_INTERP, ARGIN(const PMC * const pmc), ARGIN_FORMAT(const char *s), ...)
 {
     ASSERT_ARGS(Parrot_io_fprintf)
     va_list args;
     INTVAL ret;
 
     va_start(args, s);
-
     {
         STRING * const str = Parrot_vsprintf_c(interp, s, args);
-        ret = Parrot_io_write_s(interp, pmc, str);
+        ret = Parrot_io_write_s(interp, (PMC*)pmc, str);
     }
-
     va_end(args);
 
     return ret;
@@ -1341,8 +1346,8 @@ Parrot_io_fprintf(PARROT_INTERP, ARGMOD(PMC *pmc), ARGIN(const char *s), ...)
 
 /*
 
-=item C<INTVAL Parrot_io_pprintf(PARROT_INTERP, PIOHANDLE os_handle, const char
-*s, ...)>
+=item C<INTVAL Parrot_io_pprintf(PARROT_INTERP, const PIOHANDLE os_handle,
+ARGIN_FORMAT(const char *s), ...)>
 
 Writes a C string format with varargs to PIOHANDLE C<os_handle>. Writes
 directly to the givem C<os_handle> without any intermediate buffering or other
@@ -1355,12 +1360,11 @@ logic common to Parrot Handle PMCs.
 PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL
-Parrot_io_pprintf(PARROT_INTERP, PIOHANDLE os_handle, ARGIN(const char *s), ...)
+Parrot_io_pprintf(PARROT_INTERP, const PIOHANDLE os_handle, ARGIN_FORMAT(const char *s), ...)
 {
     ASSERT_ARGS(Parrot_io_pprintf)
     va_list  args;
     STRING  *str;
-    INTVAL   ret;
 
     va_start(args, s);
     str = Parrot_vsprintf_c(interp, s, args);
@@ -1371,10 +1375,11 @@ Parrot_io_pprintf(PARROT_INTERP, PIOHANDLE os_handle, ARGIN(const char *s), ...)
 
 /*
 
-=item C<INTVAL Parrot_io_printf(PARROT_INTERP, const char *s, ...)>
+=item C<INTVAL Parrot_io_printf(PARROT_INTERP, ARGIN_FORMAT(const char *s),
+...)>
 
 Writes a C string format with varargs to C<stdout>. This routine uses
-Parrot_io_write_s to perform the actual right, and is therefore subject to
+Parrot_io_write_s to perform the actual write, and is therefore subject to
 all the same semantics and limitations.
 
 =cut
@@ -1384,7 +1389,7 @@ all the same semantics and limitations.
 PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL
-Parrot_io_printf(PARROT_INTERP, ARGIN(const char *s), ...)
+Parrot_io_printf(PARROT_INTERP, ARGIN_FORMAT(const char *s), ...)
 {
     ASSERT_ARGS(Parrot_io_printf)
     va_list args;
@@ -1409,10 +1414,12 @@ Parrot_io_printf(PARROT_INTERP, ARGIN(const char *s), ...)
 =item C<INTVAL Parrot_io_eprintf(PARROT_INTERP, const char *s, ...)>
 
 Writes a C string format with varargs to C<stderr>. This routine uses
-Parrot_io_write_s to perform the actual right, and is therefore subject to
+C<Parrot_io_write_s> to perform the actual write, and is therefore subject to
 all the same semantics and limitations.
 
 =cut
+
+Note: We cannot use ARGIN_FORMAT here as it is used with non-standard P%vd formats.
 
 */
 
@@ -1451,6 +1458,7 @@ This is a legacy wrapper for Parrot_io_get_os_handle. Deprecated. Do not use.
 
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
+PARROT_DEPRECATED
 PIOHANDLE
 Parrot_io_getfd(PARROT_INTERP, ARGIN(PMC *pmc))
 {
@@ -1701,7 +1709,7 @@ Parrot_io_poll(PARROT_INTERP, ARGMOD(PMC *pmc), INTVAL which, INTVAL sec, INTVAL
     Parrot_Socket_attributes *io = PARROT_SOCKET(pmc);
 
     if (Parrot_io_is_closed(interp, pmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Can't poll closed socket");
 
     return Parrot_io_internal_poll(interp, io->os_handle, which, sec, usec);
@@ -1730,10 +1738,10 @@ Parrot_io_socket_connect(PARROT_INTERP, ARGMOD(PMC *pmc), ARGMOD(PMC *address))
     /* TODO: Move most of this logic to src/io/socket.c */
 
     if (Parrot_io_is_closed(interp, pmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Can't connect closed socket");
     if (PMC_IS_NULL(address))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Address is null");
 
     /* Iterate over all addresses if an array is passed */
@@ -1791,10 +1799,10 @@ Parrot_io_socket_bind(PARROT_INTERP, ARGMOD(PMC *pmc), ARGMOD(PMC *address))
     /* TODO: Move most of this logic to src/io/socket.c */
 
     if (Parrot_io_is_closed(interp, pmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Can't bind closed socket");
     if (PMC_IS_NULL(address))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Address is null");
 
     /* Iterate over all addresses if an array is passed */
@@ -1848,7 +1856,7 @@ Parrot_io_socket_listen(PARROT_INTERP, ARGMOD(PMC *pmc), INTVAL backlog)
     const Parrot_Socket_attributes * const io = PARROT_SOCKET(pmc);
 
     if (Parrot_io_is_closed(interp, pmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
                 "Can't listen on closed socket");
 
     Parrot_io_internal_listen(interp, io->os_handle, backlog);
@@ -1936,7 +1944,7 @@ Parrot_io_get_flags(PARROT_INTERP, ARGIN(PMC *handle))
 {
     ASSERT_ARGS(Parrot_io_get_flags)
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Cannot get flags for null or invalid PMC");
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
@@ -1949,7 +1957,7 @@ Parrot_io_set_flags(PARROT_INTERP, ARGIN(PMC *handle), INTVAL flags)
 {
     ASSERT_ARGS(Parrot_io_set_flags)
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Cannot set flags for null or invalid PMC");
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
@@ -1973,7 +1981,7 @@ Parrot_io_get_os_handle(PARROT_INTERP, ARGIN(PMC *handle))
 {
     ASSERT_ARGS(Parrot_io_get_os_handle)
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Cannot get a PIOHANDLE from a NULL or invalid PMC");
     {
         const IO_VTABLE * const vtable = IO_GET_VTABLE(interp, handle);
@@ -2097,7 +2105,7 @@ Parrot_io_reencode_string_for_handle(PARROT_INTERP, ARGIN(PMC *handle), ARGIN_NU
     ASSERT_ARGS(Parrot_io_reencode_string_for_handle)
 
     if (PMC_IS_NULL(handle))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_PIO_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_PIO_ERROR,
             "Handle may not be null");
     if (STRING_IS_NULL(str))
         return STRINGNULL;

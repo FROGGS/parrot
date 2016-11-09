@@ -14,6 +14,8 @@ object as an argument.  Those subroutines formerly found in this module which
 B<do> require the Parrot::Configure object as an argument have been moved into
 Parrot::Configure::Compiler.
 
+Beware that Parrot::Config is not available at configure time.
+
 =head2 Functions
 
 =over 4
@@ -36,17 +38,15 @@ use Parrot::BuildUtil qw(add_to_generated);
 our @EXPORT    = ();
 our @EXPORT_OK = qw(
     prompt copy_if_diff move_if_diff integrate
-    capture_output check_progs _slurp
+    capture capture_output check_progs _slurp
     _run_command _build_compile_command
     print_to_cache read_from_cache
     add_to_generated
 );
 our %EXPORT_TAGS = (
-    inter => [qw(prompt integrate)],
-    auto  => [
-        qw(capture_output check_progs)
-    ],
-    gen => [qw( copy_if_diff move_if_diff add_to_generated )],
+    inter => [qw( prompt integrate )],
+    auto  => [qw( capture_output check_progs )],
+    gen   => [qw( copy_if_diff move_if_diff add_to_generated )],
     cache => [qw( print_to_cache read_from_cache ) ],
 );
 
@@ -247,6 +247,55 @@ sub move_if_diff {    ## no critic Subroutines::RequireFinalReturn
     unlink $from;
 }
 
+=item C<capture($coderef)>
+
+Evals the given function without argument. The function return value,
+the captured stdout and stderr value, and its return status is returned as
+a 4-tuple.
+B<STDOUT> is redirected to F<test_$$.out> during the execution, and deleted
+after the command's run.
+B<STDERR> is redirected to F<test_$$.err> during the execution, and deleted
+after the command's run.
+C<chdir> inside the coderef is forbidden.
+
+=cut
+
+sub capture {
+    my $coderef = shift;
+
+    # disable STDOUT/STDERR
+    open my $OLDOUT, '>&', \*STDOUT;
+    open STDOUT, '>', "test_$$.out";
+    open my $OLDERR, '>&', \*STDERR;
+    open STDERR, '>', "test_$$.err";
+
+    my $output = eval { &$coderef; };
+    my $retval = $@;
+    $@ = '';
+
+    # reenable STDOUT/STDERR
+    close STDOUT;
+    open STDOUT, '>&', $OLDOUT;
+    close STDERR;
+    open STDERR, '>&', $OLDERR;
+
+    # slurp stderr
+    my ($out, $out_err) = ('', '');
+    if (-f "./test_$$.out") {
+        $out = _slurp("test_$$.out");
+        unlink "test_$$.out";
+    }
+    if (-f "./test_$$.err") {
+        $out_err = _slurp("test_$$.err");
+        unlink "test_$$.err";
+    }
+
+    return ( $output, $out, $out_err, $retval ) if wantarray;
+    ${$_[0]} = $out     if ref $_[0];
+    ${$_[1]} = $out_err if ref $_[1];
+    return $output;
+}
+
 =item C<capture_output($command)>
 
 Executes the given command. The command's output (both stdout and stderr), and
@@ -256,7 +305,7 @@ F<test.err> during the execution, and deleted after the command's run.
 =cut
 
 sub capture_output {
-    my $command = join ' ', @_;
+    my $command = join(' ', @_);
 
     # disable STDERR
     open my $OLDERR, '>&', \*STDERR;
@@ -270,7 +319,7 @@ sub capture_output {
     open STDERR, '>&', $OLDERR;
 
     # slurp stderr
-    my $out_err = _slurp("./test_$$.err");
+    my $out_err = _slurp("test_$$.err");
 
     # cleanup
     unlink "test_$$.err";

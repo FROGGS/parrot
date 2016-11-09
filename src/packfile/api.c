@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2014, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 This program is free software. It is subject to the same license as
 Parrot itself.
 
@@ -36,6 +36,7 @@ format of bytecode.
 /* HEADERIZER BEGIN: static */
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 
+PARROT_DEPRECATED
 static void compile_file(PARROT_INTERP, ARGIN(STRING *path), INTVAL is_pasm)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
@@ -127,6 +128,12 @@ static void PackFile_set_header(ARGOUT(PackFile_Header *header))
         __attribute__nonnull__(1)
         FUNC_MODIFIES(*header);
 
+static void pf_do_sub_pragmas(PARROT_INTERP,
+    ARGIN(PMC *pfpmc),
+    pbc_action_enum_t action)
+        __attribute__nonnull__(1)
+        __attribute__nonnull__(2);
+
 static void push_context(PARROT_INTERP)
         __attribute__nonnull__(1);
 
@@ -202,6 +209,9 @@ static int sub_pragma(PARROT_INTERP,
        PARROT_ASSERT_ARG(bc))
 #define ASSERT_ARGS_PackFile_set_header __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(header))
+#define ASSERT_ARGS_pf_do_sub_pragmas __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp) \
+    , PARROT_ASSERT_ARG(pfpmc))
 #define ASSERT_ARGS_push_context __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_read_pbc_file_bytes_handle __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
@@ -232,10 +242,6 @@ Notice that this can cause problems, if a Packfile is destroyed, but some of
 its contents are not destroyed, but those contents contain indirect references
 to other things in the packfile which are destroyed. Use with caution.
 
-=item C<void PackFile_destroy(PARROT_INTERP, PackFile *pf)>
-
-Deprecated. Same as C<Parrot_pf_destroy>. Use Parrot_pf_destroy instead.
-
 =cut
 
 */
@@ -260,11 +266,22 @@ Parrot_pf_destroy(PARROT_INTERP, ARGMOD(PackFile *pf))
     pf->header = NULL;
     mem_gc_free(interp, pf->dirp);
     pf->dirp   = NULL;
-    PackFile_Segment_destroy(interp, &pf->directory.base);
+    Parrot_pf_destroy_segment(interp, &pf->directory.base);
     return;
 }
 
+/*
+
+=item C<void PackFile_destroy(PARROT_INTERP, PackFile *pf)>
+
+Deprecated. Use C<Parrot_pf_destroy> instead. GH #1170
+
+=cut
+
+*/
+
 PARROT_EXPORT
+PARROT_DEPRECATED
 void
 PackFile_destroy(PARROT_INTERP, ARGMOD(PackFile *pf))
 {
@@ -295,7 +312,7 @@ INTVAL
 Parrot_pf_serialized_size(PARROT_INTERP, ARGMOD(PackFile *pf))
 {
     ASSERT_ARGS(Parrot_pf_serialized_size)
-    return PackFile_pack_size(interp, pf);
+    return Parrot_pf_pack_size(interp, pf);
 }
 
 PARROT_EXPORT
@@ -306,11 +323,11 @@ Parrot_pf_serialize(PARROT_INTERP, ARGIN(PackFile * const pf))
     ASSERT_ARGS(Parrot_pf_serialize)
     STRING      *str;
     /* Calculate required memory */
-    const opcode_t length = PackFile_pack_size(interp, pf) * sizeof (opcode_t);
+    const opcode_t length = Parrot_pf_pack_size(interp, pf) * sizeof (opcode_t);
     opcode_t * const ptr  = (opcode_t*)Parrot_gc_allocate_memory_chunk(interp, length);
 
     /* And pack it! */
-    PackFile_pack(interp, pf, ptr);
+    Parrot_pf_pack(interp, pf, ptr);
 
     str = Parrot_str_new_init(interp, (const char*)ptr, length,
             Parrot_binary_encoding_ptr, 0);
@@ -324,15 +341,16 @@ PackFile *
 Parrot_pf_deserialize(PARROT_INTERP, ARGIN(STRING *str))
 {
     ASSERT_ARGS(Parrot_pf_deserialize)
-    PackFile       * const pf  = PackFile_new(interp, 0);
-    const opcode_t * const ptr =
-            (const opcode_t *)Parrot_str_cstring(interp, str);
-    const int length           = Parrot_str_byte_length(interp, str);
+    PackFile       * const pf   = Parrot_pf_new(interp, 0);
+    const char     * const cstr = Parrot_str_cstring(interp, str);
+    /* XXX -Wcast-align Need to check alignment for RISC, or memcpy */
+    const opcode_t * const ptr  = (const opcode_t *)cstr;
+    const int length            = Parrot_str_byte_length(interp, str);
 
-    if (!PackFile_unpack(interp, pf, ptr, length)) {
-        PackFile_destroy(interp, pf);
-        Parrot_ex_throw_from_c_args(interp, NULL,
-            EXCEPTION_MALFORMED_PACKFILE, "Can't unpack packfile.");
+    if (!Parrot_pf_unpack(interp, pf, ptr, length)) {
+        Parrot_pf_destroy(interp, pf);
+        Parrot_ex_throw_from_c_noargs(interp,
+            EXCEPTION_MALFORMED_PACKFILE, "Can't unpack packfile");
     }
     return pf;
 }
@@ -386,7 +404,7 @@ Parrot_pf_tag_constant(PARROT_INTERP, ARGIN(PackFile_ConstTable *ct),
             hi = cur;
             break;
           default:
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
                                         "Non POSIX strcmp");
         }
     }
@@ -417,7 +435,7 @@ Parrot_pf_subs_by_tag(PARROT_INTERP, ARGIN(PMC * pfpmc), ARGIN(STRING * flag))
     int mode = 0;
     PMC * const subs = Parrot_pmc_new(interp, enum_class_ResizablePMCArray);
     if (!pf || !pf->cur_cs || !pf->cur_cs->const_table)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "NULL or invalid packfile");
 
     if (STRING_equal(interp, flag, CONST_STRING(interp, "load")))
@@ -456,7 +474,7 @@ Parrot_pf_subs_by_tag(PARROT_INTERP, ARGIN(PMC * pfpmc), ARGIN(STRING * flag))
                 top_hi = cur;
                 break;
               default:
-                Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
                                             "Non POSIX strcmp");
             }
         }
@@ -557,7 +575,7 @@ Parrot_pf_all_tags_list(PARROT_INTERP, ARGIN(PMC * pfpmc))
     PMC * const tags = Parrot_pmc_new(interp, enum_class_ResizableStringArray);
 
     if (!pf || !pf->cur_cs || !pf->cur_cs->const_table)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "NULL or invalid packfile");
     {
         PackFile_ConstTable * const ct = pf->cur_cs->const_table;
@@ -596,7 +614,7 @@ Parrot_pf_all_tagged_pmcs(PARROT_INTERP, ARGIN(PMC * pfpmc))
     PMC * const taghash = Parrot_pmc_new(interp, enum_class_Hash);
 
     if (!pf || !pf->cur_cs || !pf->cur_cs->const_table)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "NULL or invalid packfile");
     {
         PackFile_ConstTable * const ct = pf->cur_cs->const_table;
@@ -637,7 +655,7 @@ Parrot_pf_all_subs(PARROT_INTERP, ARGIN(PMC *pfpmc))
     ASSERT_ARGS(Parrot_pf_all_subs)
     PackFile * const pf = (PackFile*)VTABLE_get_pointer(interp, pfpmc);
     if (!pf || !pf->cur_cs || !pf->cur_cs->const_table)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "NULL or invalid packfile");
 
     {
@@ -862,7 +880,7 @@ find_const_iter(PARROT_INTERP, ARGMOD(PackFile_Segment *seg), ARGIN_NULLOK(void 
 
     switch (seg->type) {
       case PF_DIR_SEG:
-        PackFile_map_segments(interp, (const PackFile_Directory *)seg,
+        Parrot_pf_map_segments(interp, (const PackFile_Directory *)seg,
                 find_const_iter, user_data);
         break;
 
@@ -903,7 +921,7 @@ Parrot_pf_mark_packfile(PARROT_INTERP, ARGMOD_NULLOK(PackFile * pf))
         PackFile_Directory * const dir = &pf->directory;
 
         /* iterate over all dir/segs */
-        PackFile_map_segments(interp, dir, find_const_iter, NULL);
+        Parrot_pf_map_segments(interp, dir, find_const_iter, NULL);
     }
 }
 
@@ -928,7 +946,7 @@ Parrot_pf_get_packfile_main_sub(PARROT_INTERP, ARGIN(PMC * pbc))
     ASSERT_ARGS(Parrot_pf_get_packfile_main_sub)
     PackFile * const pf = (PackFile*)VTABLE_get_pointer(interp, pbc);
     if (pf == NULL || pf->cur_cs == NULL || pf->cur_cs->const_table == NULL)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Null or invalid PackFile");
     return packfile_main(pf->cur_cs);
 }
@@ -946,8 +964,8 @@ packfile_main(ARGIN(PackFile_ByteCode *bc))
 
 /*
 
-=item C<void do_sub_pragmas(PARROT_INTERP, PMC *pfpmc, pbc_action_enum_t action,
-PMC *eval_pmc)>
+=item C<static void pf_do_sub_pragmas(PARROT_INTERP, PMC *pfpmc,
+pbc_action_enum_t action)>
 
 C<action> is one of C<PBC_LOADED>, C<PBC_INIT>, or C<PBC_MAIN>.
 These determine which subs get executed at this point. Some rules:
@@ -960,19 +978,17 @@ These determine which subs get executed at this point. Some rules:
 
 The argument C<eval_pmc> is ignored.
 
-This function and the entire underlying mechanism should be deprecated and
+TODO: This function and the entire underlying mechanism should be deprecated and
 removed. See GH #428 for details.
 
 =cut
 
 */
 
-PARROT_EXPORT
-void
-do_sub_pragmas(PARROT_INTERP, ARGIN(PMC *pfpmc),
-               pbc_action_enum_t action, SHIM(PMC *eval_pmc))
+static void
+pf_do_sub_pragmas(PARROT_INTERP, ARGIN(PMC *pfpmc), pbc_action_enum_t action)
 {
-    ASSERT_ARGS(do_sub_pragmas)
+    ASSERT_ARGS(pf_do_sub_pragmas)
     PackFile            * const pf = (PackFile*)VTABLE_get_pointer(interp, pfpmc);
     PackFile_ByteCode   * const self = pf->cur_cs;
     PackFile_ConstTable * const ct = self->const_table;
@@ -1007,7 +1023,7 @@ do_sub_pragmas(PARROT_INTERP, ARGIN(PMC *pfpmc),
     if (interp->resume_flag & RESUME_INITIAL) {
         if (action == PBC_MAIN) {
             if (self->main_sub < 0)
-                Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LIBRARY_ERROR,
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LIBRARY_ERROR,
                     "No main sub found");
             {
                 PMC *      const mainsub = packfile_main(self);
@@ -1020,6 +1036,29 @@ do_sub_pragmas(PARROT_INTERP, ARGIN(PMC *pfpmc),
     }
 }
 
+/*
+
+=item C<void do_sub_pragmas(PARROT_INTERP, PMC *pfpmc, pbc_action_enum_t action,
+PMC *eval_pmc)>
+
+This function and the entire underlying mechanism is deprecated and will be
+removed. See GH #428 for details.
+
+For now use C<pf_do_sub_pragmas> instead.
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_DEPRECATED
+void
+do_sub_pragmas(PARROT_INTERP, ARGIN(PMC *pfpmc),
+               pbc_action_enum_t action, SHIM(PMC *eval_pmc))
+{
+    ASSERT_ARGS(do_sub_pragmas)
+    pf_do_sub_pragmas(interp, pfpmc, action);
+}
 /*
 
 =item C<static void PackFile_Header_validate(PARROT_INTERP, const
@@ -1042,8 +1081,8 @@ PackFile_Header_validate(PARROT_INTERP, ARGIN(const PackFile_Header *self),
 
     /* Ensure the magic is correct. */
     if (memcmp(self->magic, "\376PBC\r\n\032\n", 8) != 0) {
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
-        "PackFile_Header_validate: This is not a valid Parrot bytecode file.");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_PACKFILE,
+        "PackFile_Header_validate: Invalid Parrot bytecode file");
     }
 
     /* Ensure the bytecode version is one we can read. Currently, we only
@@ -1122,7 +1161,7 @@ PackFile_Header_read_uuid(PARROT_INTERP, ARGMOD(PackFile_Header *self),
     else
         /* Don't know this UUID type. */
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
-            "PackFile_unpack: Invalid UUID type %d\n", self->uuid_type);
+            "PackFile unpack: Invalid UUID type %d\n", self->uuid_type);
 }
 
 
@@ -1151,7 +1190,7 @@ PackFile_Header_unpack(PARROT_INTERP, ARGMOD(PackFile_Header *self),
     /* Verify that the packfile isn't too small to contain a proper header */
     if (packed_size < PACKFILE_HEADER_BYTES) {
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
-        "PackFile_unpack: Buffer length %d is shorter than PACKFILE_HEADER_BYTES %d.",
+        "PackFile unpack: Buffer length %d is shorter than PACKFILE_HEADER_BYTES %d.",
             packed_size, PACKFILE_HEADER_BYTES);
     }
 
@@ -1171,7 +1210,7 @@ PackFile_Header_unpack(PARROT_INTERP, ARGMOD(PackFile_Header *self),
 
 /*
 
-=item C<opcode_t PackFile_unpack(PARROT_INTERP, PackFile *self, const opcode_t
+=item C<opcode_t Parrot_pf_unpack(PARROT_INTERP, PackFile *self, const opcode_t
 *packed, size_t packed_size)>
 
 Unpacks a C<PackFile> from a block of memory, ensuring that the magic number is
@@ -1180,8 +1219,10 @@ any required endian and word size transforms.
 
 Returns size of unpacked opcodes if everything is okay, else zero (0).
 
-Deprecated: This function should either be renamed to Parrot_pf_* or should
-not be exposed through this API. See TT #2140
+=item C<opcode_t PackFile_unpack(PARROT_INTERP, PackFile *self, const opcode_t
+*packed, size_t packed_size)>
+
+Deprecated: Use C<Parrot_pf_unpack> instead. See GH #1170
 
 =cut
 
@@ -1190,10 +1231,10 @@ not be exposed through this API. See TT #2140
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 opcode_t
-PackFile_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
+Parrot_pf_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
     ARGIN(const opcode_t *packed), size_t packed_size)
 {
-    ASSERT_ARGS(PackFile_unpack)
+    ASSERT_ARGS(Parrot_pf_unpack)
     PackFile_Header * const header = self->header;
     const opcode_t         *cursor;
     int                     header_read_length;
@@ -1221,7 +1262,7 @@ PackFile_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
 
     if (header->dir_format != PF_DIR_FORMAT) {
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
-            "PackFile_unpack: Dir format was %d not %d\n",
+            "PackFile unpack: Dir format was %d not %d\n",
             header->dir_format, PF_DIR_FORMAT);
     }
 
@@ -1236,8 +1277,7 @@ PackFile_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
 
     /* now unpack dir, which unpacks its contents ... */
     Parrot_block_GC_mark(interp);
-    cursor = PackFile_Segment_unpack(interp,
-                                     &self->directory.base, cursor);
+    cursor = pf_segment_unpack(interp, &self->directory.base, cursor);
     Parrot_unblock_GC_mark(interp);
 
 #ifdef PARROT_HAS_HEADER_SYSMMAN
@@ -1255,125 +1295,17 @@ PackFile_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
     return cursor - packed;
 }
 
-
-/*
-
-=item C<INTVAL PackFile_map_segments(PARROT_INTERP, const PackFile_Directory
-*dir, PackFile_map_segments_func_t callback, void *user_data)>
-
-Calls the callback function C<callback> for each segment in the directory
-C<dir> called. The pointer C<user_data> is included in each call.
-
-If a callback returns non-zero, segment processing stops, returning this value.
-
-Deprecated: This function should not be exposed as a part of the pubic API.
-See TT #2140 for details.
-
-=cut
-
-*/
-
-PARROT_EXPORT
-INTVAL
-PackFile_map_segments(PARROT_INTERP, ARGIN(const PackFile_Directory *dir),
-                       PackFile_map_segments_func_t callback,
-                       ARGIN_NULLOK(void *user_data))
-{
-    ASSERT_ARGS(PackFile_map_segments)
-    size_t i;
-
-    for (i = 0; i < dir->num_segments; ++i) {
-        const INTVAL ret = callback(interp, dir->segments[i], user_data);
-        if (ret)
-            return ret;
-    }
-
-    return 0;
-}
-
-
-/*
-
-=item C<void PackFile_add_segment(PARROT_INTERP, PackFile_Directory *dir,
-PackFile_Segment *seg)>
-
-Adds the Segment C<seg> to the directory C<dir>.  The PackFile becomes the
-owner of the segment; it gets destroyed when the PackFile does.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
-
-=cut
-
-*/
-
-PARROT_EXPORT
-void
-PackFile_add_segment(PARROT_INTERP, ARGMOD(PackFile_Directory *dir),
-        ARGMOD(PackFile_Segment *seg))
-{
-    ASSERT_ARGS(PackFile_add_segment)
-    dir->segments = mem_gc_realloc_n_typed_zeroed(interp, dir->segments,
-            dir->num_segments + 1, dir->num_segments, PackFile_Segment *);
-    dir->segments[dir->num_segments] = seg;
-    ++dir->num_segments;
-    seg->dir = dir;
-
-    return;
-}
-
-
-/*
-
-=item C<PackFile_Segment * PackFile_find_segment(PARROT_INTERP,
-PackFile_Directory *dir, const STRING *name, int sub_dir)>
-
-Finds the segment with the name C<name> in the C<PackFile_Directory> if
-C<sub_dir> is true, searches directories recursively.  The returned segment is
-still owned by the C<PackFile>.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140. Consider moving this to
-src/packfile/segments.c
-
-=cut
-
-*/
-
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
-PARROT_CAN_RETURN_NULL
-PackFile_Segment *
-PackFile_find_segment(PARROT_INTERP, ARGIN_NULLOK(PackFile_Directory *dir),
-    ARGIN(const STRING *name), int sub_dir)
+PARROT_DEPRECATED
+opcode_t
+PackFile_unpack(PARROT_INTERP, ARGMOD(PackFile *self),
+    ARGIN(const opcode_t *packed), size_t packed_size)
 {
-    ASSERT_ARGS(PackFile_find_segment)
-    size_t i;
+    ASSERT_ARGS(PackFile_unpack)
 
-    if (!dir)
-        return NULL;
-
-    for (i = 0; i < dir->num_segments; ++i) {
-        PackFile_Segment *seg = dir->segments[i];
-
-        if (!seg)
-            continue;
-
-        if (STRING_equal(interp, seg->name, name))
-            return seg;
-
-        if (sub_dir && seg->type == PF_DIR_SEG) {
-            seg = PackFile_find_segment(interp,
-                    (PackFile_Directory *)seg, name, sub_dir);
-
-            if (seg)
-                return seg;
-        }
-    }
-
-    return NULL;
+    return Parrot_pf_unpack(interp, self, packed, packed_size);
 }
-
 
 /*
 
@@ -1466,10 +1398,6 @@ A Segment Header has these entries:
  - size         size of following op array, 0 if none
  * data         possibly empty data, or e.g. byte code
 
-=item C<PackFile * PackFile_new(PARROT_INTERP, INTVAL is_mapped)>
-
-Same as C<Parrot_pf_new>. Deprecated. Use Parrot_pf_new instead. See TT #2140
-
 =cut
 
 */
@@ -1491,12 +1419,12 @@ Parrot_pf_new(PARROT_INTERP, INTVAL is_mapped)
 
     /* Other fields empty for now */
     pf->cur_cs = NULL;
-    pf_register_standard_funcs(interp, pf);
+    pf_register_standard_funcs(pf);
 
     /* create the master directory, all sub-dirs go there */
     pf->directory.base.pf = pf;
     pf->dirp              = (PackFile_Directory *)
-        PackFile_Segment_new_seg(interp, &pf->directory,
+        Parrot_pf_new_segment(interp, &pf->directory,
             PF_DIR_SEG, DIRECTORY_SEGMENT_NAME, 0);
     pf->directory         = *pf->dirp;
 
@@ -1509,9 +1437,20 @@ Parrot_pf_new(PARROT_INTERP, INTVAL is_mapped)
     return pf;
 }
 
+/*
+
+=item C<PackFile * PackFile_new(PARROT_INTERP, INTVAL is_mapped)>
+
+Deprecated: Use C<Parrot_pf_new> instead. See GH #1170
+
+=cut
+
+*/
+
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 PackFile *
 PackFile_new(PARROT_INTERP, INTVAL is_mapped)
 {
@@ -1598,7 +1537,7 @@ Get's the interpreter's currently active bytecode segment
 */
 
 PARROT_PURE_FUNCTION
-PARROT_CANNOT_RETURN_NULL
+PARROT_CAN_RETURN_NULL
 PackFile_ByteCode *
 Parrot_pf_get_current_code_segment(PARROT_INTERP)
 {
@@ -1622,11 +1561,11 @@ Parrot_pf_set_current_packfile(PARROT_INTERP, ARGIN(PMC *pbc))
 {
     ASSERT_ARGS(Parrot_pf_set_current_packfile)
     if (PMC_IS_NULL(pbc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Cannot set null packfile");
     else {
         PackFile * const pf = (PackFile *)VTABLE_get_pointer(interp, pbc);
-        Parrot_switch_to_cs(interp, pf->cur_cs, 1);
+        Parrot_pf_switch_to_cs(interp, pf->cur_cs, 1);
         PARROT_GC_WRITE_BARRIER(interp, pbc);
     }
 }
@@ -1673,14 +1612,11 @@ Parrot_pf_create_default_segments(PARROT_INTERP, ARGIN(PMC * const pf_pmc),
 
 /*
 
-=item C<PackFile_Debug * Parrot_new_debug_seg(PARROT_INTERP, PackFile_ByteCode
-*cs, size_t size)>
+=item C<PackFile_Debug * Parrot_pf_new_debug_segment(PARROT_INTERP,
+PackFile_ByteCode *cs, size_t size)>
 
 Creates and appends (or resizes) a new debug seg for a code segment.  Uses the
 given size as its size.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
 
 =cut
 
@@ -1690,9 +1626,9 @@ PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
 PackFile_Debug *
-Parrot_new_debug_seg(PARROT_INTERP, ARGMOD(PackFile_ByteCode *cs), size_t size)
+Parrot_pf_new_debug_segment(PARROT_INTERP, ARGMOD(PackFile_ByteCode *cs), size_t size)
 {
-    ASSERT_ARGS(Parrot_new_debug_seg)
+    ASSERT_ARGS(Parrot_pf_new_debug_segment)
     PackFile_Debug *debug;
 
     /* it exists already, resize it */
@@ -1713,7 +1649,7 @@ Parrot_new_debug_seg(PARROT_INTERP, ARGMOD(PackFile_ByteCode *cs), size_t size)
         PARROT_GC_WRITE_BARRIER(interp, current_pfpmc);
 
         name = Parrot_sprintf_c(interp, "%Ss_DB", cs->base.name);
-        debug = (PackFile_Debug *)PackFile_Segment_new_seg(interp, dir,
+        debug = (PackFile_Debug *)Parrot_pf_new_segment(interp, dir,
                                     PF_DEBUG_SEG, name, add);
 
         debug->base.data = mem_gc_allocate_n_zeroed_typed(interp, size, opcode_t);
@@ -1726,16 +1662,34 @@ Parrot_new_debug_seg(PARROT_INTERP, ARGMOD(PackFile_ByteCode *cs), size_t size)
     return debug;
 }
 
+/*
+
+=item C<PackFile_Debug * Parrot_new_debug_seg(PARROT_INTERP, PackFile_ByteCode
+*cs, size_t size)>
+
+Deprecated: Use C<Parrot_pf_new_debug_segment> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_WARN_UNUSED_RESULT
+PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
+PackFile_Debug *
+Parrot_new_debug_seg(PARROT_INTERP, ARGMOD(PackFile_ByteCode *cs), size_t size)
+{
+    ASSERT_ARGS(Parrot_new_debug_seg)
+    return Parrot_pf_new_debug_segment(interp, cs, size);
+}
 
 /*
 
-=item C<void Parrot_debug_add_mapping(PARROT_INTERP, PackFile_Debug *debug,
+=item C<void Parrot_pf_debug_add_mapping(PARROT_INTERP, PackFile_Debug *debug,
 opcode_t offset, STRING *filename)>
 
 Adds a bytecode offset to a filename mapping for a PackFile_Debug.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
 
 TODO: Refactor this function, it is too large and complicated.
 
@@ -1745,10 +1699,10 @@ TODO: Refactor this function, it is too large and complicated.
 
 PARROT_EXPORT
 void
-Parrot_debug_add_mapping(PARROT_INTERP, ARGMOD(PackFile_Debug *debug),
-                         opcode_t offset, ARGIN(STRING *filename))
+Parrot_pf_debug_add_mapping(PARROT_INTERP, ARGMOD(PackFile_Debug *debug),
+                            opcode_t offset, ARGIN(STRING *filename))
 {
-    ASSERT_ARGS(Parrot_debug_add_mapping)
+    ASSERT_ARGS(Parrot_pf_debug_add_mapping)
     PackFile_ConstTable * const    ct         = debug->code->const_table;
     int                            insert_pos = 0;
 
@@ -1818,16 +1772,33 @@ Parrot_debug_add_mapping(PARROT_INTERP, ARGMOD(PackFile_Debug *debug),
     }
 }
 
+/*
+
+=item C<void Parrot_debug_add_mapping(PARROT_INTERP, PackFile_Debug *debug,
+opcode_t offset, STRING *filename)>
+
+Deprecated: Use C<Parrot_pf_debug_add_mapping> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_DEPRECATED
+void
+Parrot_debug_add_mapping(PARROT_INTERP, ARGMOD(PackFile_Debug *debug),
+                         opcode_t offset, ARGIN(STRING *filename))
+{
+    ASSERT_ARGS(Parrot_debug_add_mapping)
+    Parrot_pf_debug_add_mapping(interp, debug, offset, filename);
+}
 
 /*
 
-=item C<STRING * Parrot_debug_pc_to_filename(PARROT_INTERP, const PackFile_Debug
-*debug, opcode_t pc)>
+=item C<STRING * Parrot_pf_debug_pc_to_filename(PARROT_INTERP, const
+PackFile_Debug *debug, opcode_t pc)>
 
 Returns the filename of the source for the given position in the bytecode.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
 
 =cut
 
@@ -1837,10 +1808,10 @@ PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
 STRING *
-Parrot_debug_pc_to_filename(PARROT_INTERP, ARGIN(const PackFile_Debug *debug),
+Parrot_pf_debug_pc_to_filename(PARROT_INTERP, ARGIN(const PackFile_Debug *debug),
     opcode_t pc)
 {
-    ASSERT_ARGS(Parrot_debug_pc_to_filename)
+    ASSERT_ARGS(Parrot_pf_debug_pc_to_filename)
     /* Look through mappings until we find one that maps the passed
        bytecode offset. */
 
@@ -1858,16 +1829,35 @@ Parrot_debug_pc_to_filename(PARROT_INTERP, ARGIN(const PackFile_Debug *debug),
     return CONST_STRING(interp, "(unknown file)");
 }
 
+/*
+
+=item C<STRING * Parrot_debug_pc_to_filename(PARROT_INTERP, const PackFile_Debug
+*debug, opcode_t pc)>
+
+Deprecated: Use C<Parrot_pf_debug_pc_to_filename> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_WARN_UNUSED_RESULT
+PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
+STRING *
+Parrot_debug_pc_to_filename(PARROT_INTERP, ARGIN(const PackFile_Debug *debug),
+    opcode_t pc)
+{
+    ASSERT_ARGS(Parrot_debug_pc_to_filename)
+    return Parrot_pf_debug_pc_to_filename(interp, debug, pc);
+}
 
 /*
 
-=item C<PackFile_ByteCode * Parrot_switch_to_cs(PARROT_INTERP, PackFile_ByteCode
-*new_cs, int really)>
+=item C<PackFile_ByteCode * Parrot_pf_switch_to_cs(PARROT_INTERP,
+PackFile_ByteCode *new_cs, int really)>
 
 Switches to a bytecode segment C<new_cs>, returning the old segment.
-
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
 
 =cut
 
@@ -1877,14 +1867,14 @@ PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 PARROT_CANNOT_RETURN_NULL
 PackFile_ByteCode *
-Parrot_switch_to_cs(PARROT_INTERP, ARGIN(PackFile_ByteCode *new_cs), int really)
+Parrot_pf_switch_to_cs(PARROT_INTERP, ARGIN(PackFile_ByteCode *new_cs), int really)
 {
-    ASSERT_ARGS(Parrot_switch_to_cs)
+    ASSERT_ARGS(Parrot_pf_switch_to_cs)
     PackFile_ByteCode * const cur_cs = interp->code;
 
     if (!new_cs)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_NO_PREV_CS,
-            "No code segment to switch to\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_NO_PREV_CS,
+            "No code segment to switch to");
 
     interp->code = new_cs;
     Parrot_pcc_set_constants(interp, CURRENT_CONTEXT(interp),
@@ -1909,6 +1899,27 @@ Parrot_switch_to_cs(PARROT_INTERP, ARGIN(PackFile_ByteCode *new_cs), int really)
     return cur_cs;
 }
 
+/*
+
+=item C<PackFile_ByteCode * Parrot_switch_to_cs(PARROT_INTERP, PackFile_ByteCode
+*new_cs, int really)>
+
+Deprecated: Use C<Parrot_pf_switch_to_cs> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_IGNORABLE_RESULT
+PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
+PackFile_ByteCode *
+Parrot_switch_to_cs(PARROT_INTERP, ARGIN(PackFile_ByteCode *new_cs), int really)
+{
+    ASSERT_ARGS(Parrot_switch_to_cs)
+    return Parrot_pf_switch_to_cs(interp, new_cs, really);
+}
 
 /*
 
@@ -1957,7 +1968,7 @@ find_pf_ann_idx(ARGIN(PackFile_Annotations *pfa),
 
 /*
 
-=item C<void PackFile_Annotations_add_entry(PARROT_INTERP, PackFile_Annotations
+=item C<void Parrot_pf_annotations_add_entry(PARROT_INTERP, PackFile_Annotations
 *self, opcode_t offset, opcode_t key, opcode_t type, opcode_t value)>
 
 Adds a new bytecode annotation entry. Takes the annotations segment to add the
@@ -1968,19 +1979,16 @@ PF_ANNOTATION_KEY_TYPE_STR or PF_ANNOTATION_KEY_TYPE_NUM) and the value. The
 value will be an integer literal in the case of type being
 PF_ANNOTATION_KEY_TYPE_INT, or an index into the constants table otherwise.
 
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
-
 =cut
 
 */
 
 PARROT_EXPORT
 void
-PackFile_Annotations_add_entry(PARROT_INTERP, ARGMOD(PackFile_Annotations *self),
+Parrot_pf_annotations_add_entry(PARROT_INTERP, ARGMOD(PackFile_Annotations *self),
         opcode_t offset, opcode_t key, opcode_t type, opcode_t value)
 {
-    ASSERT_ARGS(PackFile_Annotations_add_entry)
+    ASSERT_ARGS(Parrot_pf_annotations_add_entry)
     opcode_t key_id   = -1;
     INTVAL   i, idx;
 
@@ -2017,7 +2025,7 @@ PackFile_Annotations_add_entry(PARROT_INTERP, ARGMOD(PackFile_Annotations *self)
         if (self->keys[key_id].type != (pf_ann_key_type_t)type)
             Parrot_ex_throw_from_c_args(interp, NULL,
                 EXCEPTION_INVALID_OPERATION,
-                "Annotations with different types of value used for key '%S'\n",
+                "Annotations with different types of value used for key '%S'",
                 self->code->const_table->str.constants[self->keys[key_id].name]);
     }
 
@@ -2041,10 +2049,30 @@ PackFile_Annotations_add_entry(PARROT_INTERP, ARGMOD(PackFile_Annotations *self)
     self->keys[key_id].len++;
 }
 
+/*
+
+=item C<void PackFile_Annotations_add_entry(PARROT_INTERP, PackFile_Annotations
+*self, opcode_t offset, opcode_t key, opcode_t type, opcode_t value)>
+
+Deprecated: Use C<Parrot_pf_annotations_add_entry> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_DEPRECATED
+void
+PackFile_Annotations_add_entry(PARROT_INTERP, ARGMOD(PackFile_Annotations *self),
+        opcode_t offset, opcode_t key, opcode_t type, opcode_t value)
+{
+    ASSERT_ARGS(PackFile_Annotations_add_entry)
+    Parrot_pf_annotations_add_entry(interp, self, offset, key, type, value);
+}
 
 /*
 
-=item C<PMC * PackFile_Annotations_lookup(PARROT_INTERP, PackFile_Annotations
+=item C<PMC * Parrot_pf_annotations_lookup(PARROT_INTERP, PackFile_Annotations
 *self, opcode_t offset, STRING *name)>
 
 Looks up the annotation(s) in force at the given bytecode offset. If just one
@@ -2053,19 +2081,16 @@ will be returned (or a NULL PMC if no annotation of that name is in force).
 Otherwise, a Hash will be returned of the all annotations. If there are none in
 force, an empty hash will be returned.
 
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
-
 =cut
 
 */
 
 PARROT_CANNOT_RETURN_NULL
 PMC *
-PackFile_Annotations_lookup(PARROT_INTERP, ARGIN(PackFile_Annotations *self),
+Parrot_pf_annotations_lookup(PARROT_INTERP, ARGIN(PackFile_Annotations *self),
         opcode_t offset, ARGIN_NULLOK(STRING *name))
 {
-    ASSERT_ARGS(PackFile_Annotations_lookup)
+    ASSERT_ARGS(Parrot_pf_annotations_lookup)
 
     if (STRING_IS_NULL(name)) {
         /* find all annotations for this offset */
@@ -2073,7 +2098,7 @@ PackFile_Annotations_lookup(PARROT_INTERP, ARGIN(PackFile_Annotations *self),
         INTVAL i;
         for (i = 0; i < self->num_keys; i++) {
             STRING * const k = self->code->const_table->str.constants[self->keys[i].name];
-            PMC    * const v = PackFile_Annotations_lookup(interp, self, offset, k);
+            PMC    * const v = Parrot_pf_annotations_lookup(interp, self, offset, k);
             if (!PMC_IS_NULL(v))
                 VTABLE_set_pmc_keyed_str(interp, result, k, v);
         }
@@ -2123,7 +2148,7 @@ PackFile_Annotations_lookup(PARROT_INTERP, ARGIN(PackFile_Annotations *self),
 =item C<PackFile_Annotations * Parrot_pf_get_annotations_segment(PARROT_INTERP,
 PackFile *pf, PackFile_ByteCode *bc)>
 
-TK: Whiteknight please fill in.
+Returns the annotations segment. If none exists, create an empty one.
 
 =cut
 
@@ -2145,7 +2170,7 @@ Parrot_pf_get_annotations_segment(PARROT_INTERP, ARGMOD(PackFile *pf),
         PackFile_Directory * const dir = bc->base.dir ? bc->base.dir :
                     &pf->directory;
         PackFile_Annotations * const annotations = (PackFile_Annotations *)
-            PackFile_Segment_new_seg(interp, dir, PF_ANNOTATIONS_SEG, name, 1);
+            Parrot_pf_new_segment(interp, dir, PF_ANNOTATIONS_SEG, name, 1);
         bc->annotations = annotations;
         annotations->code = bc;
         return annotations;
@@ -2190,6 +2215,7 @@ a compiler object and the interface there to get a packfile or equivalent.
 
 */
 
+PARROT_DEPRECATED
 static void
 compile_file(PARROT_INTERP, ARGIN(STRING *path), INTVAL is_pasm)
 {
@@ -2210,7 +2236,7 @@ compile_file(PARROT_INTERP, ARGIN(STRING *path), INTVAL is_pasm)
         if (cs) {
             interp->code = cur_code;
             VTABLE_set_pmc_keyed_str(interp, pbc_cache, path, pf_pmc);
-            do_sub_pragmas(interp, pf_pmc, PBC_LOADED, NULL);
+            pf_do_sub_pragmas(interp, pf_pmc, PBC_LOADED);
         }
         else {
             interp->code = cur_code;
@@ -2240,7 +2266,7 @@ load_file(PARROT_INTERP, ARGIN(STRING *path))
     PMC * const pf_pmc = Parrot_pf_get_packfile_pmc(interp, pf, path);
 
     if (!pf_pmc)
-        Parrot_ex_throw_from_c_args(interp, NULL, 1,
+        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
                 "Unable to load PBC file %Ss", path);
     else {
         PMC * const pbc_cache = VTABLE_get_pmc_keyed_int(interp,
@@ -2250,7 +2276,7 @@ load_file(PARROT_INTERP, ARGIN(STRING *path))
         VTABLE_set_pmc_keyed_str(interp, pbc_cache, path, pf_pmc);
         Parrot_pcc_invoke_method_from_c_args(interp, pf_pmc, method, "S->",
                 load_str);
-        do_sub_pragmas(interp, pf_pmc, PBC_LOADED, pf_pmc);
+        pf_do_sub_pragmas(interp, pf_pmc, PBC_LOADED);
     }
 }
 
@@ -2261,8 +2287,9 @@ load_file(PARROT_INTERP, ARGIN(STRING *path))
 Load the compiler libraries for a given high-level language into the
 interpreter.
 
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
+Deprecated: This function should either be renamed to
+C<Parrot_pf_load_language>, or should not be exposed through this
+API. GH #1170
 
 TODO: Refactor this function and try to reduce the size of it. It is too big.
 
@@ -2270,6 +2297,7 @@ TODO: Refactor this function and try to reduce the size of it. It is too big.
 
 */
 
+/*PARROT_DEPRECATED*/
 PARROT_EXPORT
 void
 Parrot_load_language(PARROT_INTERP, ARGIN_NULLOK(STRING *lang_name))
@@ -2282,7 +2310,7 @@ Parrot_load_language(PARROT_INTERP, ARGIN_NULLOK(STRING *lang_name))
     PMC *is_loaded_hash;
 
     if (STRING_IS_NULL(lang_name))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LIBRARY_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LIBRARY_ERROR,
             "\"load_language\" no language name");
 
     /* Full path to language library is "abc/abc.pbc". */
@@ -2312,7 +2340,7 @@ Parrot_load_language(PARROT_INTERP, ARGIN_NULLOK(STRING *lang_name))
     /* Add the include and dynext paths to the global search */
 
     /* Get the base path of the located module */
-    parrot_split_path_ext(interp, path, &found_path, &found_ext);
+    Parrot_split_path_ext(interp, path, &found_path, &found_ext);
     name_length = Parrot_str_length(interp, lang_name);
     found_path = STRING_substr(interp, found_path, 0,
             Parrot_str_length(interp, found_path)-name_length);
@@ -2347,8 +2375,9 @@ Parrot_load_language(PARROT_INTERP, ARGIN_NULLOK(STRING *lang_name))
 
 Load a bytecode, PIR, or PASM file into the interpreter.
 
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140
+Deprecated: This function should either be renamed to
+C<Parrot_pf_load_bytecode>, or should not be exposed through this
+API. GH #1170
 
 TODO: We need to cleanup the way bytecode is loaded. This probably needs some
 major changes.
@@ -2358,6 +2387,7 @@ major changes.
 */
 
 /* intermediate hook during changes */
+/*PARROT_DEPRECATED*/
 PARROT_EXPORT
 void
 Parrot_load_bytecode(PARROT_INTERP, ARGIN_NULLOK(Parrot_String file_str))
@@ -2369,10 +2399,10 @@ Parrot_load_bytecode(PARROT_INTERP, ARGIN_NULLOK(Parrot_String file_str))
     enum_runtime_ft file_type;
 
     if (STRING_IS_NULL(file_str))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_LIBRARY_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_LIBRARY_ERROR,
             "\"load_bytecode\" no file name");
 
-    parrot_split_path_ext(interp, file_str, &wo_ext, &ext);
+    Parrot_split_path_ext(interp, file_str, &wo_ext, &ext);
 
     /* check if wo_ext is loaded */
     is_loaded_hash = VTABLE_get_pmc_keyed_int(interp,
@@ -2398,7 +2428,7 @@ Parrot_load_bytecode(PARROT_INTERP, ARGIN_NULLOK(Parrot_String file_str))
     /* remember wo_ext => full_path mapping */
     VTABLE_set_string_keyed_str(interp, is_loaded_hash, wo_ext, path);
 
-    parrot_split_path_ext(interp, path, &found_path, &found_ext);
+    Parrot_split_path_ext(interp, path, &found_path, &found_ext);
 
     /* Check if the file found was actually a bytecode file (.pbc
      * extension) or a source file (.pir or .pasm extension). */
@@ -2453,17 +2483,15 @@ Parrot_pf_load_bytecode_search(PARROT_INTERP, ARGIN(STRING *file))
 
 /*
 
-=item C<void PackFile_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, PMC
+=item C<void Parrot_pf_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, PMC
 *eval)>
 
 Calls C<:load>, C<:init>, C<:main>, C<:immediate> and/or C<:postcomp>
 subroutines in the current packfile, depending on the value of C<action>.
 See C<do_sub_pragmas> for more details.
 
-Deprecated: This function should either be renamed to Parrot_pf_*, or should
-not be exposed through this API. TT #2140. Use Parrot_pf_prepare_packfile_init
-and Parrot_pf_prepare_packfile_load (and any other variants we need to create
-in the future) instead.
+Use C<Parrot_pf_prepare_packfile_init> and C<Parrot_pf_prepare_packfile_load>
+(and any other variants we need to create in the future) instead.
 
 =cut
 
@@ -2471,10 +2499,30 @@ in the future) instead.
 
 PARROT_EXPORT
 void
-PackFile_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, ARGIN_NULLOK(PMC *eval))
+Parrot_pf_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, SHIM(PMC *eval))
+{
+    ASSERT_ARGS(Parrot_pf_fixup_subs)
+    pf_do_sub_pragmas(interp, Parrot_pf_get_current_packfile(interp), what);
+}
+
+/*
+
+=item C<void PackFile_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, PMC
+*eval)>
+
+Deprecated: Use <Parrot_pf_fixup_subs> instead. GH #1170
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_DEPRECATED
+void
+PackFile_fixup_subs(PARROT_INTERP, pbc_action_enum_t what, SHIM(PMC *eval))
 {
     ASSERT_ARGS(PackFile_fixup_subs)
-    do_sub_pragmas(interp, Parrot_pf_get_current_packfile(interp), what, eval);
+    pf_do_sub_pragmas(interp, Parrot_pf_get_current_packfile(interp), what);
 }
 
 /*
@@ -2495,15 +2543,15 @@ Parrot_pf_prepare_packfile_init(PARROT_INTERP, ARGIN(PMC * const pfpmc))
 {
     ASSERT_ARGS(Parrot_pf_prepare_packfile_init)
     if (PMC_IS_NULL(pfpmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_PACKFILE,
             "Could not load packfile: Invalid PMC");
     else {
         PackFile * const pf = (PackFile *)VTABLE_get_pointer(interp, pfpmc);
         if (!pf)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_PACKFILE,
                 "Could not load packfile: Invalid Pointer");
         if (!(pf->options & PFOPT_HEADERONLY))
-            do_sub_pragmas(interp, pfpmc, PBC_MAIN, pfpmc);
+            pf_do_sub_pragmas(interp, pfpmc, PBC_MAIN);
     }
 }
 
@@ -2524,15 +2572,15 @@ Parrot_pf_prepare_packfile_load(PARROT_INTERP, ARGIN(PMC * const pfpmc))
 {
     ASSERT_ARGS(Parrot_pf_prepare_packfile_load)
     if (PMC_IS_NULL(pfpmc))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_PACKFILE,
             "Could not load packfile: Invalid PMC");
     else {
         PackFile * const pf = (PackFile *)VTABLE_get_pointer(interp, pfpmc);
         if (!pf)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_MALFORMED_PACKFILE,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_MALFORMED_PACKFILE,
                 "Could not load packfile: Invalid Pointer");
         if (!(pf->options & PFOPT_HEADERONLY))
-            do_sub_pragmas(interp, pfpmc, PBC_LOADED, NULL);
+            pf_do_sub_pragmas(interp, pfpmc, PBC_LOADED);
     }
 }
 
@@ -2546,7 +2594,7 @@ Take a Packfile or PackfileView PMC and write its contents out as a .pbc file
 =item C<PackFile * Parrot_pf_read_pbc_file(PARROT_INTERP, STRING * const
 fullname)>
 
-Read a .pbc file with the given C<fullname> into a PackFile structure.
+Read a F<.pbc> file with the given C<fullname> into a PackFile structure.
 
 =cut
 
@@ -2559,7 +2607,7 @@ Parrot_pf_write_pbc_file(PARROT_INTERP, ARGIN(PMC *pf_pmc), ARGIN(STRING *filena
     ASSERT_ARGS(Parrot_pf_write_pbc_file)
     PackFile * const pf = (PackFile *)VTABLE_get_pointer(interp, pf_pmc);
     if (!pf)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
             "Could not get packfile.");
     else {
         PIOHANDLE fp;
@@ -2571,9 +2619,9 @@ Parrot_pf_write_pbc_file(PARROT_INTERP, ARGIN(PMC *pf_pmc), ARGIN(STRING *filena
                 "Cannot open output file %Ss", filename);
         }
         else {
-            const Parrot_Int size = PackFile_pack_size(interp, pf) * sizeof (opcode_t);
+            const Parrot_Int size = Parrot_pf_pack_size(interp, pf) * sizeof (opcode_t);
             opcode_t * const packed = (opcode_t*)mem_sys_allocate(size);
-            PackFile_pack(interp, pf, packed);
+            Parrot_pf_pack(interp, pf, packed);
             Parrot_io_internal_write(interp, fp, (char *)packed, size);
         }
         Parrot_io_internal_close(interp, fp);
@@ -2599,16 +2647,16 @@ Parrot_pf_read_pbc_file(PARROT_INTERP, ARGIN_NULLOK(STRING * const fullname))
         /* can't read a file that doesn't exist */
         if (!Parrot_file_stat_intval(interp, fullname, STAT_EXISTS))
             Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                    "Can't stat %Ss, code %i.\n", fullname, errno);
+                    "Can't stat %Ss, code %i", fullname, errno);
 
         /* we may need to relax this if we want to read bytecode from pipes */
         if (!Parrot_file_stat_intval(interp, fullname, STAT_ISREG))
             Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                    "'%Ss', is not a regular file %i.\n", fullname, errno);
+                    "'%Ss' is not a regular file %i", fullname, errno);
 
         /* check that fullname isn't NULL, just in case */
         if (!fullname)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
                 "Trying to open a NULL filename");
 
         program_size = Parrot_file_stat_intval(interp, fullname, STAT_FILESIZE);
@@ -2637,12 +2685,13 @@ read_pbc_file_packfile_handle(PARROT_INTERP, ARGIN(STRING * const fullname),
 {
     ASSERT_ARGS(read_pbc_file_packfile_handle)
     char * const program_code = read_pbc_file_bytes_handle(interp, io, program_size);
-    PackFile * const pf = PackFile_new(interp, 0);
+    PackFile * const pf = Parrot_pf_new(interp, 0);
     pf->options = 0;
 
-    if (!PackFile_unpack(interp, pf, (opcode_t *)program_code, (size_t)program_size))
+    /* XXX -Wcast-align Need to check alignment for RISC, or memcpy */
+    if (!Parrot_pf_unpack(interp, pf, (opcode_t *)program_code, (size_t)program_size))
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                "Can't unpack packfile %Ss.\n", fullname);
+                "Can't unpack packfile %Ss", fullname);
     return pf;
 }
 
@@ -2682,8 +2731,8 @@ read_pbc_file_bytes_handle(PARROT_INTERP, PIOHANDLE io, INTVAL program_size)
 
         if (!program_code) {
             Parrot_io_internal_close(interp, io);
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                    "Could not reallocate buffer while reading packfile from PIO.\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+                    "Could not reallocate buffer while reading packfile from PIO");
         }
 
         cursor = program_code + program_size;
@@ -2717,7 +2766,7 @@ read_pbc_file_packfile(PARROT_INTERP, ARGIN(STRING * const fullname),
 
     if (io == PIO_INVALID_HANDLE)
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                "Can't open %Ss, code %i.\n", fullname, errno);
+                "Can't open %Ss, code %i", fullname, errno);
 
     /* TODO: Who frees program_code? We don't do it here (And don't need to
              if we've mmapped it. Figure out where this is handled and
@@ -2746,12 +2795,13 @@ read_pbc_file_packfile(PARROT_INTERP, ARGIN(STRING * const fullname),
 
 #endif
 
-    pf = PackFile_new(interp, is_mapped);
+    pf = Parrot_pf_new(interp, is_mapped);
     pf->options = 0;
 
-    if (!PackFile_unpack(interp, pf, (opcode_t *)program_code, (size_t)program_size))
+    /* XXX -Wcast-align Need to check alignment for RISC, or memcpy */
+    if (!Parrot_pf_unpack(interp, pf, (opcode_t *)program_code, (size_t)program_size))
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                "Can't unpack packfile %Ss.\n", fullname);
+                "Can't unpack packfile %Ss", fullname);
 
     Parrot_io_internal_close(interp, io);
     return pf;
@@ -2767,12 +2817,11 @@ set up the appropriate context.
 If no match, set up a dummy PMC entry.  In either case, return a
 pointer to the PMC.
 
-DEPRECATED: use Parrot_pf_get_packfile_main_sub instead
-
 =cut
 
 */
 
+/*PARROT_DEPRECATED*/
 PARROT_CANNOT_RETURN_NULL
 static PMC*
 set_current_sub(PARROT_INTERP)
@@ -2790,7 +2839,6 @@ set_current_sub(PARROT_INTERP)
      * Walk the fixup table.  The first Sub-like entry should be our
      * entry point with the address at our resume_offset.
      */
-
     for (i = 0; i < ct->pmc.const_count; i++) {
         PMC * const sub_pmc = ct->pmc.constants[i];
         if (VTABLE_isa(interp, sub_pmc, SUB)) {
@@ -2805,14 +2853,13 @@ set_current_sub(PARROT_INTERP)
                     Parrot_pcc_set_HLL(interp, CURRENT_CONTEXT(interp), sub->HLL_id);
                     return sub_pmc;
                 }
-
                 break;
             }
         }
     }
 
     /* If we didn't find anything, put a dummy PMC into current_sub.
-       The default values set by SUb.init are appropriate for the
+       The default values set by Sub.init are appropriate for the
        dummy, don't need additional settings. */
     new_sub_pmc = Parrot_pmc_new(interp, enum_class_Sub);
     Parrot_pcc_set_sub(interp, CURRENT_CONTEXT(interp), new_sub_pmc);
@@ -2845,8 +2892,8 @@ Parrot_pf_execute_bytecode_program(PARROT_INTERP, ARGMOD(PMC *pbc),
     PackFile *pf = (PackFile*)VTABLE_get_pointer(interp, pbc);
 
     if (!pf || !pf->cur_cs)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
-            "Could not get packfile.");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
+            "Could not get packfile");
 
     Parrot_pf_set_current_packfile(interp, pbc);
     Parrot_pf_prepare_packfile_init(interp, pbc);
@@ -2891,7 +2938,7 @@ Parrot_pf_get_version_string(PARROT_INTERP, ARGIN(PMC * pbc))
 *dir, pack_file_types t, STRING *name, STRING *file_name, int add)>
 
 Creates a new PackFile_Segment for the given C<file_name>.  See
-C<PackFile_Segment_new_seg()> for the other arguments.
+C<Parrot_pf_new_segment()> for the other arguments.
 
 =cut
 
@@ -2905,7 +2952,7 @@ create_seg(PARROT_INTERP, ARGMOD(PackFile_Directory *dir), pack_file_types t,
 {
     ASSERT_ARGS(create_seg)
     STRING *           const seg_name = Parrot_sprintf_c(interp, "%Ss_%Ss", name, file_name);
-    PackFile_Segment * const seg      = PackFile_Segment_new_seg(interp, dir, t, seg_name, add);
+    PackFile_Segment * const seg      = Parrot_pf_new_segment(interp, dir, t, seg_name, add);
     return seg;
 }
 

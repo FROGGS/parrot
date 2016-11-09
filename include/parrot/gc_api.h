@@ -47,8 +47,8 @@ typedef struct _Parrot_GC_Init_Args {
 typedef enum _gc_sys_type_enum {
     MS,  /* mark and sweep */
     INF, /* infinite memory core */
-    MS2,
-    GMS
+    MS2, /* non-recursive mark and sweep */
+    GMS  /* generational mark & sweep */
 } gc_sys_type_enum;
 
 /* pool iteration */
@@ -122,7 +122,10 @@ typedef enum {
     PARROT_OS_VERSION,
     PARROT_OS_VERSION_NUMBER,
     CPU_ARCH,
-    CPU_TYPE
+    CPU_TYPE,
+
+    /* additional gc constants */
+    MAX_GENERATIONS
 } Interpinfo_enum;
 
 /* &end_gen */
@@ -145,6 +148,10 @@ void Parrot_block_GC_mark(PARROT_INTERP)
 
 PARROT_EXPORT
 void Parrot_block_GC_mark_locked(PARROT_INTERP)
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
+void Parrot_block_GC_move(PARROT_INTERP)
         __attribute__nonnull__(1);
 
 PARROT_EXPORT
@@ -247,7 +254,6 @@ void Parrot_gc_free_fixed_size_storage(PARROT_INTERP,
         FUNC_MODIFIES(*data);
 
 PARROT_EXPORT
-PARROT_CANNOT_RETURN_NULL
 void Parrot_gc_free_memory_chunk(PARROT_INTERP, ARGIN_NULLOK(void *data))
         __attribute__nonnull__(1);
 
@@ -300,6 +306,10 @@ void Parrot_gc_mark_STRING_alive_fun(PARROT_INTERP,
     ARGMOD_NULLOK(STRING *obj))
         __attribute__nonnull__(1)
         FUNC_MODIFIES(*obj);
+
+PARROT_EXPORT
+int Parrot_gc_max_generations(PARROT_INTERP)
+        __attribute__nonnull__(1);
 
 PARROT_EXPORT
 size_t Parrot_gc_mem_alloc_since_last_collect(PARROT_INTERP)
@@ -395,6 +405,10 @@ unsigned int Parrot_is_blocked_GC_mark(PARROT_INTERP)
         __attribute__nonnull__(1);
 
 PARROT_EXPORT
+unsigned int Parrot_is_blocked_GC_move(PARROT_INTERP)
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
 unsigned int Parrot_is_blocked_GC_sweep(PARROT_INTERP)
         __attribute__nonnull__(1);
 
@@ -407,12 +421,18 @@ void Parrot_unblock_GC_mark_locked(PARROT_INTERP)
         __attribute__nonnull__(1);
 
 PARROT_EXPORT
+void Parrot_unblock_GC_move(PARROT_INTERP)
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
 void Parrot_unblock_GC_sweep(PARROT_INTERP)
         __attribute__nonnull__(1);
 
 #define ASSERT_ARGS_Parrot_block_GC_mark __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_block_GC_mark_locked __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_Parrot_block_GC_move __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_block_GC_sweep __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
@@ -495,6 +515,8 @@ void Parrot_unblock_GC_sweep(PARROT_INTERP)
 #define ASSERT_ARGS_Parrot_gc_mark_STRING_alive_fun \
      __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_Parrot_gc_max_generations __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_gc_mem_alloc_since_last_collect \
      __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
@@ -541,11 +563,15 @@ void Parrot_unblock_GC_sweep(PARROT_INTERP)
     , PARROT_ASSERT_ARG(pmc))
 #define ASSERT_ARGS_Parrot_is_blocked_GC_mark __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_Parrot_is_blocked_GC_move __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_is_blocked_GC_sweep __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_unblock_GC_mark __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_unblock_GC_mark_locked __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_Parrot_unblock_GC_move __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_unblock_GC_sweep __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))

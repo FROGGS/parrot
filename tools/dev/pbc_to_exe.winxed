@@ -37,7 +37,10 @@ const string C_HEADER = <<:HEADER
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef _WIN32
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h> /* for GetModuleFileName() */
+#else
 #  include <unistd.h> /* for readlink() */
 #endif
 #ifdef __APPLE__
@@ -211,7 +214,6 @@ const string C_MAIN = <<:MAIN
             return class_pmc;
         }
 
-        PARROT_CANNOT_RETURN_NULL
         static void
         get_imcc_compiler_pmc(Parrot_PMC interp, Parrot_PMC class_pmc, Parrot_Int is_pasm)
         {
@@ -662,6 +664,7 @@ function link_file(string objfile, string exefile, string extra_obj, var opts)
     string libdir       = $P0['libdir'];
     string versiondir   = $P0['versiondir'];
     string optimize     = $P0['optimize'];
+    int    has_mt       = $P0['has_mt'];
 
     string pathquote  = '"';
     string config     = pathquote;
@@ -700,7 +703,7 @@ function link_file(string objfile, string exefile, string extra_obj, var opts)
     var file = new [ 'File' ];
     string manifest_file_name = exefile + '.manifest';
     var manifest_exists = file.exists(manifest_file_name);
-    if (manifest_exists != 0) {
+    if (manifest_exists != 0 && has_mt) {
         # MSVC app manifest exists, embed it
         string embed_manifest_str = 'mt.exe -nologo -manifest ' +
                 manifest_file_name +

@@ -18,9 +18,11 @@ Tests the Integer PMC.
 .const string MAXINT = 'MAXINT'
 .const string MININT = 'MININT'
 .const string NO_SYSINFO = 'This test requires sysinfo'
+.const num PRECISION = 0.000001
 
 .sub 'test' :main
     .include 'test_more.pir'
+    .include 'fp_equality.pasm'
 
     get_max_min()
 
@@ -140,7 +142,7 @@ CODE
 .end
 
 .sub test_get_as_base_bounds_check
-    throws_substring(<<'CODE', 'get_as_base: base out of bounds', 'get_as_base lower bound check')
+    throws_substring(<<'CODE', 'base out of bounds', 'get_as_base lower bound check')
     .sub main :main
         $P0 = new ['Integer']
         $P0 = 42
@@ -148,7 +150,7 @@ CODE
         say $S0
     .end
 CODE
-    throws_substring(<<'CODE', 'get_as_base: base out of bounds', 'get_as_base upper bound check')
+    throws_substring(<<'CODE', 'base out of bounds', 'get_as_base upper bound check')
     .sub main :main
         $P0 = new ['Integer']
         $P0 = 42
@@ -552,7 +554,7 @@ fin:
     $P1 = new ['Integer']
     $P1 = 10
     sub $P1, $P1, $P0
-    is($P1, 6.9, 'DEFAULT sub')
+    is($P1, 6.9, 'DEFAULT sub', PRECISION)
 
     $P0 = new ['Integer']
     $P0 = 5

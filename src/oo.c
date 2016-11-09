@@ -22,6 +22,7 @@ Handles class and object manipulation.
 #include "pmc/pmc_class.h"
 #include "pmc/pmc_object.h"
 #include "pmc/pmc_namespace.h"
+#include "pmc/pmc_sub.h"
 
 #include "oo.str"
 
@@ -682,7 +683,7 @@ fail_if_type_exists(PARROT_INTERP, ARGIN(PMC *name))
         }
         break;
       default:
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INTERP_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INTERP_ERROR,
                     "Unrecognized class name PMC type");
         break;
     }
@@ -714,7 +715,7 @@ Parrot_oo_register_type(PARROT_INTERP, ARGIN(PMC *name), ARGIN(PMC *_namespace))
     if (!PMC_IS_NULL(classobj)) {
         STRING * const classname = VTABLE_get_string(interp, _namespace);
         Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-                "Class %Ss already registered!\n",
+                "Class %Ss already registered",
                 Parrot_str_escape(interp, classname));
     }
 
@@ -926,6 +927,9 @@ Parrot_invalidate_method_cache(PARROT_INTERP, ARGIN_NULLOK(STRING *_class))
 Find a method PMC for a named method, given the class PMC, current
 interpreter, and name of the method. Don't use a possible method cache.
 
+Note that this function with DISPATCH_NAMESPACE is wrong. It needs to skip all
+non-methods, esp. for builtin PMCs. See GH #304.
+
 =cut
 
 */
@@ -938,6 +942,8 @@ Parrot_find_method_direct(PARROT_INTERP, ARGIN(PMC *_class), ARGIN(STRING *metho
 {
     ASSERT_ARGS(Parrot_find_method_direct)
 
+    /* old pre-8.2 behavior. see GH #304 */
+#ifdef DISPATCH_NAMESPACE
     STRING * const class_str   = CONST_STRING(interp, "class");
     STRING * const methods_str = CONST_STRING(interp, "methods");
     PMC    * const mro         = _class->vtable->mro;
@@ -971,9 +977,50 @@ Parrot_find_method_direct(PARROT_INTERP, ARGIN(PMC *_class), ARGIN(STRING *metho
             return method;
         }
     }
-
     TRACE_FM(interp, _class, method_name, NULL);
     return PMCNULL;
+#else
+    STRING * const class_str   = CONST_STRING(interp, "class");
+    STRING * const methods_str = CONST_STRING(interp, "methods");
+    PMC    * const mro         = _class->vtable->mro;
+    const INTVAL   n           = VTABLE_elements(interp, mro);
+    INTVAL         i;
+
+    for (i = 0; i < n; ++i) {
+        PMC * const _class_i  = VTABLE_get_pmc_keyed_int(interp, mro, i);
+        PMC * const ns        = VTABLE_get_namespace(interp, _class_i);
+        PMC * const class_obj = VTABLE_inspect_str(interp, ns, class_str);
+        STRING * const is_method = CONST_STRING(interp, "method_name");
+        PMC        *method    = PMCNULL;
+        PMC        *method_hash = PMCNULL;
+
+        if (PMC_IS_NULL(class_obj))
+            method_hash = VTABLE_inspect_str(interp, ns, methods_str);
+        else
+            method_hash = VTABLE_inspect_str(interp, class_obj, methods_str);
+        if (!PMC_IS_NULL(method_hash))
+            method = VTABLE_get_pmc_keyed_str(interp, method_hash, method_name);
+        if (PMC_IS_NULL(method))
+            method = VTABLE_get_pmc_keyed_str(interp, ns, method_name);
+        /* Ignore subs, only methods.
+           From all DOES->invokable NCI and NativePCCMethod are methods, so just Sub */
+        if (!PMC_IS_NULL(method)
+            && method->vtable->base_type == enum_class_Sub
+            && !Sub_comp_flag_TEST(METHOD, PMC_data_typed(method, Parrot_Sub_attributes *)))
+            method = PMCNULL;
+
+        TRACE_FM(interp, _class_i, method_name, method);
+
+        if (!PMC_IS_NULL(method)) {
+            if (interp->thread_data != NULL)
+                method = VTABLE_clone(interp, method);
+            PARROT_ASSERT_INTERP(method, interp);
+            return method;
+        }
+    }
+    TRACE_FM(interp, _class, method_name, NULL);
+    return PMCNULL;
+#endif
 }
 
 
@@ -987,8 +1034,8 @@ interp, and name of the method.
 
 This routine should use the current scope's method cache, if there is
 one. If not, it creates a new method cache. Or, rather, it will when
-we've got that bit working. For now it unconditionally goes and looks up
-the name in the global stash.
+we've got that bit working. For now it unconditionally goes and looks
+up the name in the global stash.
 
 =cut
 
@@ -1125,7 +1172,7 @@ C3_merge(PARROT_INTERP, ARGIN(PMC *merge_list))
 
     /* If we didn't find anything to accept, error. */
     if (PMC_IS_NULL(accepted))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_ILL_INHERIT,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ILL_INHERIT,
             "Could not build C3 linearization: ambiguous hierarchy");
 
     /* Otherwise, remove what was accepted from the merge lists. */
@@ -1184,8 +1231,8 @@ Parrot_ComputeMRO_C3(PARROT_INTERP, ARGIN(PMC *_class))
 
     /* Now get immediate parents list. */
     if (PMC_IS_NULL(immediate_parents))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_METHOD_NOT_FOUND,
-            "Failed to get parents list from class!");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_METHOD_NOT_FOUND,
+            "Failed to get parents list from class");
 
     parent_count = VTABLE_elements(interp, immediate_parents);
 
@@ -1318,7 +1365,7 @@ Parrot_ComposeRole(PARROT_INTERP, ARGIN(PMC *role),
                     Parrot_ex_throw_from_c_args(interp, NULL,
                         EXCEPTION_ROLE_COMPOSITION_METHOD_CONFLICT,
                         "A conflict occurred during role composition "
-                        "due to method '%S'.", method_name);
+                        "due to method '%S'", method_name);
             }
 
             /* What about a conflict with ourslef? */
@@ -1329,7 +1376,7 @@ Parrot_ComposeRole(PARROT_INTERP, ARGIN(PMC *role),
                     EXCEPTION_ROLE_COMPOSITION_METHOD_CONFLICT,
                     "A conflict occurred during role composition;"
                     " the method '%S' from the role managed to conflict "
-                    "with itself somehow.", method_name);
+                    "with itself somehow", method_name);
 
             /* If we got here, no conflicts! Add method to the "to compose"
              * list. */
@@ -1352,7 +1399,7 @@ Parrot_ComposeRole(PARROT_INTERP, ARGIN(PMC *role),
                     Parrot_ex_throw_from_c_args(interp, NULL,
                         EXCEPTION_ROLE_COMPOSITION_METHOD_CONFLICT,
                         "A conflict occurred during role composition"
-                        " due to the aliasing of '%S' to '%S'.",
+                        " due to the aliasing of '%S' to '%S'",
                         method_name, alias_name);
             }
 
@@ -1363,7 +1410,7 @@ Parrot_ComposeRole(PARROT_INTERP, ARGIN(PMC *role),
                     EXCEPTION_ROLE_COMPOSITION_METHOD_CONFLICT,
                     "A conflict occurred during role composition"
                     " due to the aliasing of '%S' to '%S' (role already has"
-                    " a method '%S').", method_name, alias_name, alias_name);
+                    " a method '%S')", method_name, alias_name, alias_name);
 
             /* If we get here, no conflicts! Add method to the "to compose"
              * list with its alias. */

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2012, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 This program is free software. It is subject to the same license as
 Parrot itself.
 
@@ -32,26 +32,25 @@ PMC *PMCNULL;
 /* HEADERIZER BEGIN: static */
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 
-static void PackFile_Constant_dump_pmc(PARROT_INTERP,
+static void pf_const_dump_pmc(PARROT_INTERP,
     ARGIN(const PackFile_ConstTable *ct),
     ARGIN(PMC *self))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3);
 
-static void PackFile_Constant_dump_str(PARROT_INTERP,
-    ARGIN(const STRING *self))
+static void pf_const_dump_str(PARROT_INTERP, ARGIN(const STRING *self))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
 
 static void pobj_flag_dump(PARROT_INTERP, long flags)
         __attribute__nonnull__(1);
 
-#define ASSERT_ARGS_PackFile_Constant_dump_pmc __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+#define ASSERT_ARGS_pf_const_dump_pmc __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(ct) \
     , PARROT_ASSERT_ARG(self))
-#define ASSERT_ARGS_PackFile_Constant_dump_str __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+#define ASSERT_ARGS_pf_const_dump_str __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(self))
 #define ASSERT_ARGS_pobj_flag_dump __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
@@ -62,8 +61,7 @@ static void pobj_flag_dump(PARROT_INTERP, long flags)
 
 /*
 
-=item C<void PackFile_ConstTable_dump(PARROT_INTERP, const PackFile_ConstTable
-*self)>
+=item C<void pf_const_dump(PARROT_INTERP, const PackFile_ConstTable *self)>
 
 Dumps the constant table C<self>.
 
@@ -71,39 +69,27 @@ Dumps the constant table C<self>.
 
 */
 
-PARROT_EXPORT
 void
-PackFile_ConstTable_dump(PARROT_INTERP, ARGIN(const PackFile_ConstTable *self))
+pf_const_dump(PARROT_INTERP, ARGIN(const PackFile_ConstTable *self))
 {
-    ASSERT_ARGS(PackFile_ConstTable_dump)
+    ASSERT_ARGS(pf_const_dump)
     opcode_t i;
 
     for (i = 0; i < self->num.const_count; i++) {
-        Parrot_io_printf(interp, "    # %x:\n", (long)i);
+        Parrot_io_printf(interp, "    # %lx:\n", (long)i);
         Parrot_io_printf(interp, "    [ 'PFC_NUMBER', %g ],\n", self->num.constants[i]);
     }
 
     for (i = 0; i < self->str.const_count; i++) {
-        Parrot_io_printf(interp, "    # %x:\n", (long)i);
-        PackFile_Constant_dump_str(interp, self->str.constants[i]);
+        Parrot_io_printf(interp, "    # %lx:\n", (long)i);
+        pf_const_dump_str(interp, self->str.constants[i]);
     }
 
     for (i = 0; i < self->pmc.const_count; i++) {
-        Parrot_io_printf(interp, "    # %x:\n", (long)i);
-        PackFile_Constant_dump_pmc(interp, self, self->pmc.constants[i]);
+        Parrot_io_printf(interp, "    # %lx:\n", (long)i);
+        pf_const_dump_pmc(interp, self, self->pmc.constants[i]);
     }
 }
-
-/*
-
-=item C<static void PackFile_Constant_dump(PARROT_INTERP, const
-PackFile_ConstTable *ct, const PackFile_Constant *self)>
-
-Dumps the constant C<self>.
-
-=cut
-
-*/
 
 /* [this desperately needs better abstraction, so we're not duplicating the enum
  * PObj_enum definition in the include/parrot/pobj.h file.  -- rgr, 1-Mar-08.]
@@ -176,8 +162,7 @@ pobj_flag_dump(PARROT_INTERP, long flags)
 
 /*
 
-=item C<static void PackFile_Constant_dump_str(PARROT_INTERP, const STRING
-*self)>
+=item C<static void pf_const_dump_str(PARROT_INTERP, const STRING *self)>
 
 Print the representation of a string constant.
 
@@ -186,9 +171,9 @@ Print the representation of a string constant.
 */
 
 static void
-PackFile_Constant_dump_str(PARROT_INTERP, ARGIN(const STRING *self))
+pf_const_dump_str(PARROT_INTERP, ARGIN(const STRING *self))
 {
-    ASSERT_ARGS(PackFile_Constant_dump_str)
+    ASSERT_ARGS(pf_const_dump_str)
 
     Parrot_io_printf(interp, "    [ 'PFC_STRING', {\n");
     pobj_flag_dump(interp, (long)PObj_get_FLAGS(self));
@@ -202,8 +187,8 @@ PackFile_Constant_dump_str(PARROT_INTERP, ARGIN(const STRING *self))
 
 /*
 
-=item C<static void PackFile_Constant_dump_pmc(PARROT_INTERP, const
-PackFile_ConstTable *ct, PMC *self)>
+=item C<static void pf_const_dump_pmc(PARROT_INTERP, const PackFile_ConstTable
+*ct, PMC *self)>
 
 Print the representation of a PMC constant.
 
@@ -212,10 +197,10 @@ Print the representation of a PMC constant.
 */
 
 static void
-PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
+pf_const_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
                             ARGIN(PMC *self))
 {
-    ASSERT_ARGS(PackFile_Constant_dump_pmc)
+    ASSERT_ARGS(pf_const_dump_pmc)
 
     if (self->vtable->base_type == enum_class_Key) {
         size_t  i;
@@ -249,8 +234,8 @@ PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
                     STRING *s = Parrot_key_string(interp, key);
 
                     Parrot_io_printf(interp, "        TYPE        => STRING\n");
-                    ct_index = PackFile_ConstTable_rlookup_str(interp, ct, s);
-                    Parrot_io_printf(interp, "        PFC_OFFSET  => %ld\n", ct_index);
+                    ct_index = Parrot_pf_ConstTable_rlookup_str(interp, ct, s);
+                    Parrot_io_printf(interp, "        PFC_OFFSET  => "SIZE_FMT"\n", ct_index);
                     Parrot_io_printf(interp, "        DATA        => '%Ss'\n",
                                         ct->str.constants[ct_index]);
                     Parrot_io_printf(interp, "       },\n");
@@ -276,7 +261,7 @@ PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
                 Parrot_io_printf(interp, "       },\n");
                 break;
               default:
-                Parrot_io_eprintf(NULL, "PackFile_Constant_pack: "
+                Parrot_io_eprintf(NULL, "pf_const_dump_pmc: "
                             "unsupported constant type\n");
                 Parrot_x_exit(interp, 1);
             }
@@ -302,11 +287,11 @@ PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
             case enum_class_ResizablePMCArray:
             case enum_class_ResizableStringArray:
                 {
-                    const int n = VTABLE_get_integer(interp, self);
+                    const INTVAL n = VTABLE_get_integer(interp, self);
                     STRING* const out_buffer = VTABLE_get_repr(interp, self);
                     Parrot_io_printf(interp,
                             "\t\tclass => %Ss,\n"
-                            "\t\telement count => %d,\n"
+                            "\t\telement count => "INTVAL_FMT",\n"
                             "\t\telements => %Ss,\n",
                             self->vtable->whoami,
                             n,
@@ -340,15 +325,16 @@ PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
                 }
                 Parrot_io_printf(interp,
                         "\t\tclass       => %Ss,\n"
-                        "\t\tstart_offs  => %d,\n"
-                        "\t\tend_offs    => %d,\n"
+                        "\t\tstart_offs  => "SIZE_FMT",\n"
+                        "\t\tend_offs    => "SIZE_FMT",\n"
                         "\t\tname        => '%Ss',\n"
                         "\t\tsubid       => '%Ss',\n"
                         "\t\tmethod      => '%Ss',\n"
                         "\t\tnsentry     => '%Ss',\n"
                         "\t\tnamespace   => %Ss,\n"
-                        "\t\tHLL_id      => %d,\n"
-                        "\t\tn_regs_used => [ %d, %d, %d, %d ],\n",
+                        "\t\tHLL_id      => "INTVAL_FMT",\n"
+                        "\t\tn_regs_used => [ "UINTVAL_FMT", "UINTVAL_FMT", "
+                                               UINTVAL_FMT", "UINTVAL_FMT" ],\n",
                         self->vtable->whoami,
                         sub->start_offs,
                         sub->end_offs,
@@ -371,7 +357,7 @@ PackFile_Constant_dump_pmc(PARROT_INTERP, ARGIN(const PackFile_ConstTable *ct),
                         VTABLE_get_repr(interp, self));
                 break;
             default:
-                Parrot_io_printf(interp, "\t\tno dump info for PMC %ld %Ss\n",
+                Parrot_io_printf(interp, "\t\tno dump info for PMC "INTVAL_FMT" %Ss\n",
                         self->vtable->base_type, self->vtable->whoami);
                 Parrot_io_printf(interp, "\t\tclass => %Ss,\n", self->vtable->whoami);
         }

@@ -610,7 +610,7 @@ sub _pir_stdin_output_slurp {
             or die "Unable to pipe output to us: $!";
         <$in>;
     };
-    $result =~ s/(^(?:==|--)\d+(?:==|--).*\n)//mg if defined $ENV{VALGRIND};
+    $result = valgrind_filter(undef, $result) if $ENV{VALGRIND};
     return $result;
 }
 
@@ -635,8 +635,6 @@ sub pir_stdin_output_is {
 Runs the PIR code while piping data into its standard input and passes the test
 if the output matches the expected result.
 
-=back
-
 =cut
 
 sub pir_stdin_output_like {
@@ -644,6 +642,30 @@ sub pir_stdin_output_like {
 
     my $result = _pir_stdin_output_slurp($input_string, $code, $expected_output);
     Test::More::like($result, $expected_output, $description);
+}
+
+=item C<valgrind_filter($builder, $result)>
+
+Filters valgrind stderr output from the result string.
+
+=back
+
+=cut
+
+sub valgrind_filter {
+    my ($builder, $output) = @_;
+    if ($output =~ /^(?:==|--)\d+(?:==|--)\s+definitely lost: (\d+) bytes in (\d+) blocks\n/m) {
+        if ($1) {
+            my $msg = "LEAK SUMMARY: definitely lost: $1 bytes in $2 blocks";
+            $builder ? $builder->diag($msg) : Test::More::diag($msg);
+        }
+    }
+    $output =~ s/(^(?:==|--)\d+(?:==|--).*\n)//mg;
+    # --pid:0:syswrap- WARNING: Ignoring sigreturn( ..., UC_RESET_ALT_STACK );
+    # on longjmp, darwin only.
+    $output =~ s/(^--(?:\d)+:0:syswrap-.*\n)//mg
+      if $^O eq 'darwin' and !$ENV{TEST_VERBOSE};
+    $output;
 }
 
 # The following methods are private. They should not be used by modules
@@ -811,9 +833,8 @@ sub _generate_test_functions {
 
             my $meth        = $parrot_test_map{$func};
             my $real_output = slurp_file($out_f);
-            my $ori_output = $real_output;
-            $real_output =~ s/(^(?:==|--)\d+(?:==|--).*\n)//mg if defined $ENV{VALGRIND};
-
+            my $ori_output  = $real_output;
+            $real_output = valgrind_filter($builder, $real_output) if $ENV{VALGRIND};
             _unlink_or_retain( $out_f );
 
             # set a todo-item for Test::Builder to find
@@ -835,9 +856,8 @@ sub _generate_test_functions {
                 }
                 else {
                     $builder->ok(0, $desc);
-                    $builder->diag( "$cmd\nExited with error code: $exit_code, expected: $expected\n"
-                                    . "STDOUT:\n$real_output\n"
-                                    );
+                    $builder->diag( "$cmd\nExited with error code: $exit_code, expected: $expected\n" );
+                    $builder->diag( "STDOUT:\n$real_output\n" ) if $ENV{TEST_VERBOSE};
                     return 0;
                 }
             }
@@ -989,6 +1009,7 @@ sub _generate_test_functions {
 
             # $test_no will be part of temporary files
             my $test_no = $builder->current_test() + 1;
+            my $verbose = $ENV{TEST_VERBOSE} ? $ENV{TEST_VERBOSE} : 0;
 
             convert_line_endings($expected);
 
@@ -1019,6 +1040,7 @@ sub _generate_test_functions {
                 );
                 $builder->diag("'$cmd' failed with exit code $exit_code")
                     if $exit_code;
+                $builder->diag( $cmd."\n" ) if $verbose > 1;
 
                 if ( !-e $obj_f ) {
                     $builder->diag( "Failed to build '$obj_f': " . slurp_file($build_f) );
@@ -1051,6 +1073,7 @@ sub _generate_test_functions {
                 );
                 $builder->diag("'$cmd' failed with exit code $exit_code")
                     if $exit_code;
+                $builder->diag( $cmd."\n" ) if $verbose > 1;
 
                 if ( !-e $exe_f ) {
                     $builder->diag( "Failed to build '$exe_f': " . slurp_file($build_f) );
@@ -1072,8 +1095,7 @@ sub _generate_test_functions {
                 );
                 my $output = slurp_file($out_f);
                 my $ori_output = $output;
-                $output =~ s/(^(?:==|--)\d+(?:==|--).*\n)//mg if defined $ENV{VALGRIND};
-
+                $output = valgrind_filter($builder, $output) if $ENV{VALGRIND};
                 if ($exit_code) {
                     $pass = $builder->ok( 0, $desc );
                     $builder->diag( "Exited with error code: $exit_code\n"

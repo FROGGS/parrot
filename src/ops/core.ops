@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2001-2015, Parrot Foundation.
 ** core.ops
 */
 
@@ -53,7 +54,11 @@ internal use only; don't emit these opcodes.
 
 =item B<end>()
 
-Halts the interpreter. See also B<exit>.
+Halts the current interpreter. See also B<exit>.
+
+Note that a user-defined method currently creates its own interpreter,
+so end inside a method is like a return without any context.
+This is unspecified behaviour. Currently it is replaced by the returncc op.
 
 =cut
 
@@ -111,7 +116,7 @@ inline op check_events__() :internal :flow {
     opcode_t * const _this = CUR_OPCODE;
     opcode_t * const handler = Parrot_ex_throw_from_op_args(interp, _this,
         EXCEPTION_INVALID_OPERATION,
-        "check_events__ opcode doesn't do anything useful.");
+        "check_events__ opcode doesn't do anything useful");
     goto ADDRESS(handler);
     /* Restore op_func_table. */
     Parrot_runcore_disable_event_checking(interp);
@@ -161,7 +166,7 @@ Branch forward or backward by the amount in $1.
 =cut
 
 inline op branch(in LABEL) :base_loop :flow {
-    if(Parrot_cx_check_scheduler(interp, cur_opcode + $1) == 0)
+    if (Parrot_cx_check_scheduler(interp, cur_opcode + $1) == NULL)
         goto ADDRESS(0);
     goto OFFSET($1);
 }
@@ -378,7 +383,6 @@ inline op invokecc(invar PMC) :flow {
     PMC      * const p     = $1;
     opcode_t *dest         = expr NEXT();
     PMC      * const ctx   = CURRENT_CONTEXT(interp);
-    PMC      * const signature = Parrot_pcc_get_signature(interp, ctx);
 
     Parrot_pcc_set_pc(interp, ctx, dest);
     Parrot_pcc_reuse_continuation(interp, ctx, dest);
@@ -390,7 +394,6 @@ inline op invoke(invar PMC, invar PMC) :flow {
     opcode_t   *dest       = expr NEXT();
     PMC * const p          = $1;
     PMC * const ctx        = CURRENT_CONTEXT(interp);
-    PMC * const signature  = Parrot_pcc_get_signature(interp, ctx);
 
     Parrot_pcc_set_pc(interp, ctx, dest);
     interp->current_cont   = $2;
@@ -423,7 +426,7 @@ inline op tailcall(invar PMC) :flow {
 }
 
 inline op returncc() :flow {
-    PMC * const p = Parrot_pcc_get_continuation(interp, CURRENT_CONTEXT(interp));
+    PMC *      const p    = Parrot_pcc_get_continuation(interp, CURRENT_CONTEXT(interp));
     opcode_t * const dest = VTABLE_invoke(interp, p, expr NEXT());
     goto ADDRESS(dest);
 }
@@ -474,7 +477,7 @@ op set_args(inconst PMC) :flow {
     opcode_t * const raw_args = CUR_OPCODE;
     PMC * const signature = $1;
     PMC * const call_sig = Parrot_pcc_build_sig_object_from_op(interp,
-            PMCNULL, signature, raw_args);
+                               PMCNULL, signature, raw_args);
     INTVAL argc;
     GETATTR_FixedIntegerArray_size(interp, signature, argc);
     Parrot_pcc_set_signature(interp, CURRENT_CONTEXT(interp), call_sig);
@@ -608,7 +611,7 @@ inline op set_addr(invar PMC, invar LABEL) {
 
 inline op get_addr(out INT, invar PMC) {
     void * const ptr = VTABLE_get_pointer(interp, $2);
-    $1 = (INTVAL)ptr;
+    $1 = PTR2INTVAL(ptr);
 }
 
 =back
@@ -891,7 +894,7 @@ op finalize(in PMC) {
             }
         }
         else
-            Parrot_ex_throw_from_c_args(interp, NULL,
+            Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_INVALID_OPERATION, "missing runloop");
     }
 }
@@ -1144,7 +1147,7 @@ Get the current ParrotInterpreter.
 op runinterp(invar PMC, in LABEL) {
     Interp * const new_interp = (Interp *)VTABLE_get_pointer(interp, $1);
     Interp_flags_SET(new_interp, PARROT_EXTERN_CODE_FLAG);
-    Parrot_switch_to_cs(new_interp, interp->code, 1);
+    Parrot_pf_switch_to_cs(new_interp, interp->code, 1);
     runops(new_interp, REL_PC + $2);
 }
 
@@ -1452,7 +1455,7 @@ If there are none, returns an empty Hash.
 inline op annotations(out PMC) {
     if (interp->code->annotations) {
         const opcode_t cur_pos = (expr NEXT()) - interp->code->base.data;
-        $1 = PackFile_Annotations_lookup(interp, interp->code->annotations,
+        $1 = Parrot_pf_annotations_lookup(interp, interp->code->annotations,
                 cur_pos, NULL);
     }
     else {
@@ -1470,7 +1473,7 @@ current point. Returns PMCNULL if there is none.
 inline op annotations(out PMC, in STR) {
     if (interp->code->annotations) {
         const opcode_t cur_pos = (expr NEXT()) - interp->code->base.data;
-        $1 = PackFile_Annotations_lookup(interp, interp->code->annotations,
+        $1 = Parrot_pf_annotations_lookup(interp, interp->code->annotations,
                 cur_pos, $2);
     }
     else {
@@ -1483,10 +1486,6 @@ inline op annotations(out PMC, in STR) {
 =cut
 
 ###############################################################################
-
-=head1 COPYRIGHT
-
-Copyright (C) 2001-2012, Parrot Foundation.
 
 =head1 LICENSE
 

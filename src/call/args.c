@@ -358,7 +358,7 @@ Parrot_pcc_build_sig_object_from_op(PARROT_INTERP, ARGIN_NULLOK(PMC *signature),
         const INTVAL raw_index = raw_args[arg_index + 2];
 
         if (arg_named_count && !(arg_flags & PARROT_ARG_NAME))
-            Parrot_ex_throw_from_c_args(interp, NULL,
+            Parrot_ex_throw_from_c_noargs(interp,
                 EXCEPTION_INVALID_OPERATION,
                 "named arguments must follow all positional arguments");
 
@@ -386,7 +386,7 @@ Parrot_pcc_build_sig_object_from_op(PARROT_INTERP, ARGIN_NULLOK(PMC *signature),
                          && Parrot_CallContext_exists_keyed_str(interp,
                                 call_object, string_value))
                     {
-                        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+                        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
                                 "duplicate named argument in call");
                     }
                     extract_named_arg_from_op(interp, call_object, string_value,
@@ -403,6 +403,8 @@ Parrot_pcc_build_sig_object_from_op(PARROT_INTERP, ARGIN_NULLOK(PMC *signature),
                         ? Parrot_pcc_get_pmc_constant(interp, ctx, raw_index)
                         : CTX_REG_PMC(interp, ctx, raw_index);
 
+                PARROT_ASSERT(pmc_value
+                    || !"CallContext: Empty PMC argument");
                 if (arg_flags & PARROT_ARG_FLATTEN) {
                     dissect_aggregate_arg(interp, call_object, pmc_value);
                 }
@@ -504,7 +506,7 @@ dissect_aggregate_arg(PARROT_INTERP, ARGMOD(PMC *call_object), ARGIN(PMC *aggreg
                 Parrot_hash_value_to_pmc(interp, hash, _bucket->value)););
     }
     else {
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
                 "flattened parameters must be a hash or array");
     }
 }
@@ -570,7 +572,7 @@ Parrot_pcc_build_call_from_c_args(PARROT_INTERP,
 =item C<static void set_call_from_varargs(PARROT_INTERP, PMC *signature, const
 char *sig, va_list *args)>
 
-Helper for Parrot_pcc_build_call_from_varargs and Parrot_pcc_set_call_from_varargs.
+Helper for C<Parrot_pcc_build_call_from_varargs> and C<Parrot_pcc_set_call_from_varargs>.
 
 =cut
 
@@ -604,7 +606,7 @@ set_call_from_varargs(PARROT_INTERP,
                 }
                 else if (type_lookahead == 'i') {
                     if (i)
-                        Parrot_ex_throw_from_c_args(interp, NULL,
+                        Parrot_ex_throw_from_c_noargs(interp,
                             EXCEPTION_INVALID_OPERATION,
                             "Dispatch: only the first argument can be an invocant");
                     else {
@@ -762,7 +764,7 @@ Parrot_pcc_build_sig_object_from_varargs(PARROT_INTERP, ARGIN_NULLOK(PMC *obj),
                     Parrot_CallContext_push_pmc(interp, call_object, pmc_arg);
                     if (type_lookahead == 'i') {
                         if (i != 0)
-                            Parrot_ex_throw_from_c_args(interp, NULL,
+                            Parrot_ex_throw_from_c_noargs(interp,
                                 EXCEPTION_INVALID_OPERATION,
                                 "Dispatch: only the first argument "
                                 "can be an invocant");
@@ -879,7 +881,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
                 if (named_count > 0) {
                     if (named_used_list != NULL)
                         Parrot_hash_destroy(interp, named_used_list);
-                    Parrot_ex_throw_from_c_args(interp, NULL,
+                    Parrot_ex_throw_from_c_noargs(interp,
                         EXCEPTION_INVALID_OPERATION,
                         "named parameters must follow all positional parameters");
                 }
@@ -907,7 +909,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
                 if (!(param_flags & PARROT_ARG_STRING)) {
                     if (named_used_list != NULL)
                         Parrot_hash_destroy(interp, named_used_list);
-                    Parrot_ex_throw_from_c_args(interp, NULL,
+                    Parrot_ex_throw_from_c_noargs(interp,
                         EXCEPTION_INVALID_OPERATION,
                         "named parameters must have a name specified");
                 }
@@ -933,7 +935,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
             else if (named_count > 0) {
                 if (named_used_list != NULL)
                     Parrot_hash_destroy(interp, named_used_list);
-                Parrot_ex_throw_from_c_args(interp, NULL,
+                Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_INVALID_OPERATION,
                     "named parameters must follow all positional parameters");
             }
@@ -961,7 +963,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
               default:
                 if (named_used_list != NULL)
                     Parrot_hash_destroy(interp, named_used_list);
-                Parrot_ex_throw_from_c_args(interp, NULL,
+                Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_INVALID_OPERATION, "invalid parameter type");
                 break;
             }
@@ -1045,7 +1047,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
         if (!(param_flags & PARROT_ARG_NAME)) {
             if (named_used_list != NULL)
                 Parrot_hash_destroy(interp, named_used_list);
-            Parrot_ex_throw_from_c_args(interp, NULL,
+            Parrot_ex_throw_from_c_noargs(interp,
                 EXCEPTION_INVALID_OPERATION,
                 "named parameters must follow all positional parameters");
         }
@@ -1089,7 +1091,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
         if (!(param_flags & PARROT_ARG_STRING)) {
             if (named_used_list != NULL)
                 Parrot_hash_destroy(interp, named_used_list);
-            Parrot_ex_throw_from_c_args(interp, NULL,
+            Parrot_ex_throw_from_c_noargs(interp,
                EXCEPTION_INVALID_OPERATION,
                "named parameters must have a name specified");
         }
@@ -1137,7 +1139,7 @@ fill_params(PARROT_INTERP, ARGMOD_NULLOK(PMC *call_object),
                   default:
                     if (named_used_list != NULL)
                         Parrot_hash_destroy(interp, named_used_list);
-                    Parrot_ex_throw_from_c_args(interp, NULL,
+                    Parrot_ex_throw_from_c_noargs(interp,
                         EXCEPTION_INVALID_OPERATION, "invalid parameter type");
                     break;
                 }
@@ -1248,7 +1250,7 @@ named_argument_arity_error(PARROT_INTERP, int named_arg_count,
         };);
 
     Parrot_hash_destroy(interp, named_used_list);
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
         "Invalid named arguments, unspecified error");
 }
 
@@ -1283,7 +1285,7 @@ assign_default_param_value(PARROT_INTERP, INTVAL param_index, INTVAL param_flags
         *accessor->pmc(interp, arg_info, param_index) = PMCNULL;
         break;
       default:
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_INVALID_OPERATION, "invalid parameter type");
         break;
     }
@@ -1510,7 +1512,7 @@ parse_signature_string(PARROT_INTERP, ARGIN(const char *signature),
                 default:
                     Parrot_ex_throw_from_c_args(interp, NULL,
                         EXCEPTION_INVALID_OPERATION,
-                        "invalid signature string element %c!", *x);
+                        "Invalid signature type '%c'", *x);
             }
 
         }
@@ -1525,11 +1527,12 @@ parse_signature_string(PARROT_INTERP, ARGIN(const char *signature),
                 case 'o': flags |= PARROT_ARG_OPTIONAL;     break;
                 case 'p': flags |= PARROT_ARG_OPT_FLAG;     break;
                 case 's': flags |= PARROT_ARG_SLURPY_ARRAY; break;
+                /* case 't': break; */
                 case ' ': break;
                 default:
                     Parrot_ex_throw_from_c_args(interp, NULL,
                         EXCEPTION_INVALID_OPERATION,
-                        "invalid signature string element %c!", *x);
+                        "Invalid signature string element %c!", *x);
             }
         }
     }

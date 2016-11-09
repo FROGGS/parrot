@@ -67,7 +67,7 @@ null_error(PARROT_INTERP)
 {
     ASSERT_ARGS(null_error)
 
-    Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNEXPECTED_NULL,
+    Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_UNEXPECTED_NULL,
         "Invalid operation on null string");
 }
 
@@ -168,6 +168,7 @@ static STR_VTABLE Parrot_null_encoding = {
     (str_vtable_upcase_t)null_error,
     (str_vtable_downcase_t)null_error,
     (str_vtable_titlecase_t)null_error,
+    (str_vtable_foldcase_t)null_error,
     (str_vtable_upcase_first_t)null_error,
     (str_vtable_downcase_first_t)null_error,
     (str_vtable_titlecase_first_t)null_error,

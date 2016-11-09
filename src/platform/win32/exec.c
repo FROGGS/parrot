@@ -61,14 +61,14 @@ Parrot_Run_OS_Command(PARROT_INTERP, STRING *command)
 
     /* Start the child process. */
     if (!CreateProcess(shell, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_NOSPAWN,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_NOSPAWN,
             "Can't spawn child process");
 
     WaitForSingleObject(pi.hProcess, INFINITE);
 
     if (!GetExitCodeProcess(pi.hProcess, &status)) {
         Parrot_warn(interp, PARROT_WARNINGS_PLATFORM_FLAG,
-            "Process completed: Failed to get exit code.");
+            "Process completed: Failed to get exit code");
     }
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
@@ -108,7 +108,7 @@ Parrot_Run_OS_Command_Argv(PARROT_INTERP, PMC *cmdargs)
     /* Ensure there's something in the PMC array. */
     pmclen = VTABLE_elements(interp, cmdargs);
     if (pmclen == 0)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_NOSPAWN,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_NOSPAWN,
             "Empty argument array for spawnw");
 
     /* Now build command line. */
@@ -130,7 +130,7 @@ Parrot_Run_OS_Command_Argv(PARROT_INTERP, PMC *cmdargs)
     si.cb = sizeof (si);
     memset(&pi, 0, sizeof (pi));
     if (!CreateProcess(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_NOSPAWN,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_NOSPAWN,
             "Can't spawn child process");
 
     WaitForSingleObject(pi.hProcess, INFINITE);
@@ -138,7 +138,7 @@ Parrot_Run_OS_Command_Argv(PARROT_INTERP, PMC *cmdargs)
     /* Get exit code. */
     if (!GetExitCodeProcess(pi.hProcess, &status)) {
         Parrot_warn(interp, PARROT_WARNINGS_PLATFORM_FLAG,
-            "Process completed: Failed to get exit code.");
+            "Process completed: Failed to get exit code");
     }
 
     /* Clean up. */

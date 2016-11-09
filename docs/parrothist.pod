@@ -1,4 +1,4 @@
-# Copyright (C) 2006-2014, Parrot Foundation.
+# Copyright (C) 2006-2015, Parrot Foundation.
 =encoding utf8
 
 =head1 NAME
@@ -177,5 +177,25 @@ Starred release numbers indicate supported releases.
  rurban      6.7.0          2014-Aug-19     "Grey-headed Lovebird"
  Util        6.8.0          2014-Sep-16     "Little Lorikeet"
  rurban      6.9.0 *        2014-Oct-21     "Rosy-faced Lovebird"
+ Util        6.10.0         2014-Nov-18     "New Caledonian lorikeet"
+ rurban      6.11.0         2014-Dec-16     "Fischer's Lovebird"
+
+ Util        7.0.0 *        2015-Jan-20     "Crimson Shining Parrot"
+ rurban      7.0.1 *        2015-Jan-23     (bugfix release)
+ rurban      7.0.2 *        2015-Jan-29     (bugfix release)
+ rurban      7.1.0          2015-Feb-17     "Lilian's Lovebird"
+ Util        7.2.0          2015-Mar-17     "Blue-crowned racquet-tail"
+ rurban      7.3.0 *        2015-Apr-21     "Peach-faced Lovebird"
+ Util        7.4.0          2015-May-19     "Festive Amazon"
+ rurban      7.5.0          2015-Jun-16     "Yellow-collared Lovebird"
+ Util        7.6.0 *        2015-Jul-21     "Yellow-throated Hanging Parrot"
+ rurban      7.7.0          2015-Aug-18     "Red-headed Lovebird"
+ Util        7.8.0          2015-Sep-15     "Military Macaw"
+ rurban      7.9.0 *        2015-Oct-20     "Sangihe hanging parrot"
+ Util        7.10.0         2015-Nov-17     "Wyrd Parrot"
+ rurban      7.11.0         2015-Dec-15     "Amazonian parrotlet"
+
+ Util        8.0.0 *        2016-Jan-19     (No release; pining for the fjords)
+ rurban      8.1.0 *        2016-Feb-16     "Andean Parakeet"
 
 =cut

@@ -135,7 +135,10 @@ typedef struct parrot_interp_t Interp;
 #  endif /* PTR_SIZE == LONG_SIZE */
 #endif /* PTR_SIZE == INTVAL_SIZE */
 #define PTR2INTVAL(p)    INTVAL2PTR(INTVAL, (p))
-#define PTR2UINTVAL(p)    UINTVAL2PTR(UINTVAL, (p))
+#define PTR2UINTVAL(p)   UINTVAL2PTR(UINTVAL, (p))
+#define PTR2ULONG(p)     UINTVAL2PTR(unsigned long, (p))
+/* cast a const qualifier away. */
+#define PTR_UNCONST(any, p) INTVAL2PTR((any), INTVAL2PTR(INTVAL, (p)))
 
 /*
  * some compilers don't like lvalue casts, so macroize them
@@ -193,15 +196,17 @@ typedef void (*funcptr_t)(void);
 
 /* define macros for converting between data and function pointers.  As it
  * turns out, ANSI C does appear to permit you to do this conversion if you
- * convert the value to an integer (well, a value type large enough to hold
+ * convert the value to a long (well, a value type large enough to hold
  * a pointer) in between.  Believe it or not, this even works on TenDRA (tcc).
- *
- * NOTE!  UINTVAL is incorrect below.  It should be UINTPTR or something like
- * that. The equivalent of C99's uintptr_t- a non-pointer data type that can
- * hold a pointer.
+ * Note that on win64 MSVC a long is 4 bytes, not 8.
  */
-#define D2FPTR(x) UINTVAL2PTR(funcptr_t, PTR2UINTVAL(x))
-#define F2DPTR(x) UINTVAL2PTR(void *, PTR2UINTVAL((funcptr_t) (x)))
+#ifdef _MSC_VER
+#  define D2FPTR(x) UINTVAL2PTR(funcptr_t, PTR2UINTVAL(x))
+#  define F2DPTR(x) UINTVAL2PTR(void *, PTR2UINTVAL((funcptr_t) (x)))
+#else
+#  define D2FPTR(x) UINTVAL2PTR(funcptr_t, PTR2ULONG(x))
+#  define F2DPTR(x) UINTVAL2PTR(void *, PTR2ULONG((funcptr_t) (x)))
+#endif
 
 /* On Win32 we need the constant O_BINARY for open() (at least for Borland C),
    but on UNIX it doesn't exist, so set it to 0 if it's not defined

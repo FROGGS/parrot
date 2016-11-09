@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2010, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -140,7 +140,7 @@ Parrot_runcore_switch(PARROT_INTERP, ARGIN(STRING *name))
 
     /* XXX This might end in an endless exception cycle. Better panic here? */
     Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_UNIMPLEMENTED,
-        "Invalid runcore %Ss requested\n", name);
+        "Invalid runcore %Ss requested", name);
 }
 
 
@@ -211,8 +211,7 @@ runops_int(PARROT_INTERP, size_t offset)
     interp->resume_flag  |= RESUME_RESTART;
 
     while (interp->resume_flag & RESUME_RESTART) {
-        opcode_t * const pc = (opcode_t *)
-            interp->code->base.data + interp->resume_offset;
+        opcode_t * const pc = interp->code->base.data + interp->resume_offset;
         const runcore_runops_fn_type core = interp->run_core->runops;
 
         interp->resume_offset = 0;
@@ -225,7 +224,7 @@ runops_int(PARROT_INTERP, size_t offset)
          * is ok. */
         if (interp->resume_flag & RESUME_RESTART) {
             if ((int)interp->resume_offset < 0)
-                Parrot_ex_throw_from_c_args(interp, NULL, 1,
+                Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INTERNAL_PANIC,
                     "branch_cs: illegal resume offset");
         }
     }
@@ -280,7 +279,7 @@ Parrot_runcore_destroy(PARROT_INTERP)
 
 =over 4
 
-=item C<void dynop_register(PARROT_INTERP, PMC *lib_pmc)>
+=item C<void Parrot_dynop_register(PARROT_INTERP, PMC *lib_pmc)>
 
 Register a dynamic oplib.
 
@@ -290,9 +289,9 @@ Register a dynamic oplib.
 
 PARROT_EXPORT
 void
-dynop_register(PARROT_INTERP, ARGIN(PMC *lib_pmc))
+Parrot_dynop_register(PARROT_INTERP, ARGIN(PMC *lib_pmc))
 {
-    ASSERT_ARGS(dynop_register)
+    ASSERT_ARGS(Parrot_dynop_register)
     op_lib_t     *lib;
     oplib_init_f  init_func;
 
@@ -317,6 +316,24 @@ dynop_register(PARROT_INTERP, ARGIN(PMC *lib_pmc))
     parrot_hash_oplib(interp, lib);
 }
 
+/*
+
+=item C<void dynop_register(PARROT_INTERP, PMC *lib_pmc)>
+
+This function is deprecated, use C<Parrot_dynop_register> instead.
+
+=cut
+
+*/
+
+PARROT_EXPORT
+PARROT_DEPRECATED
+void
+dynop_register(PARROT_INTERP, ARGIN(PMC *lib_pmc))
+{
+    ASSERT_ARGS(dynop_register)
+    Parrot_dynop_register(interp, lib_pmc);
+}
 
 /*
 

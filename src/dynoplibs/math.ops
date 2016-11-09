@@ -69,6 +69,8 @@ and defined with y == 0 is provided by the mod op.
 
 If the denominator is zero, a 'Divide by zero' exception is thrown.
 
+If the denominator is inf or nan, a wrong integer will be returned.
+
 =cut
 
 inline op cmod(out INT, in INT, in INT)  {
@@ -93,7 +95,6 @@ inline op cmod(invar PMC, invar PMC, in INT)  {
     }
 
     result = VTABLE_get_integer(interp, $2) % $3;
-
     $1 = Parrot_pmc_new_init_int(interp, VTABLE_type(interp, $2), result);
 }
 
@@ -109,7 +110,6 @@ inline op cmod(invar PMC, invar PMC, invar PMC)  {
     }
 
     result = VTABLE_get_integer(interp, $2) % value;
-
     $1 = Parrot_pmc_new_init_int(interp, VTABLE_type(interp, $2), result);
 }
 
@@ -144,6 +144,9 @@ defined with y == 0 is provided by the mod op.
 
 If the denominator is zero, a 'Divide by zero' exception is thrown.
 
+If the denominator is inf or nan, the denominator will be returned
+as String.
+
 =cut
 
 inline op cmod(out NUM, in NUM, in NUM)  {
@@ -154,7 +157,11 @@ inline op cmod(out NUM, in NUM, in NUM)  {
             "Divide by zero");
         goto ADDRESS(handler);
     }
+#if defined(PARROT_HAS_FMODL) && NUMVAL_SIZE > 8
+    $1 = (FLOATVAL)fmodl($2, den);
+#else
     $1 = fmod($2, den);
+#endif
 }
 
 inline op cmod(invar PMC, invar PMC, in NUM)  {
@@ -163,15 +170,22 @@ inline op cmod(invar PMC, invar PMC, in NUM)  {
 
     if (FLOAT_IS_ZERO(value)) {
         opcode_t * const handler = Parrot_ex_throw_from_op_args(interp, expr NEXT(),
-            EXCEPTION_DIV_BY_ZERO,
-            "Divide by zero");
+            EXCEPTION_DIV_BY_ZERO, "Divide by zero");
         goto ADDRESS(handler);
     }
+#if defined(PARROT_HAS_FMODL) && NUMVAL_SIZE > 8
+    result = (FLOATVAL)fmodl(VTABLE_get_number(interp, $2), value);
+#else
+    result = fmod(VTABLE_get_number(interp, $2), value);
+#endif
 
-    result = fmod(VTABLE_get_integer(interp, $2), value);
-
-    $1 = Parrot_pmc_new_init_int(interp,
-        VTABLE_type(interp, $2), (INTVAL)result);
+    if (PARROT_FLOATVAL_IS_INF_OR_NAN(result)) {
+        $1 = Parrot_pmc_new(interp, enum_class_String);
+        VTABLE_set_number_native(interp, $1, result);
+    }
+    else
+        $1 = Parrot_pmc_new_init_int(interp,
+               VTABLE_type(interp, $2), (INTVAL)result);
 }
 
 =back
@@ -272,7 +286,7 @@ inline op rand(out INT, in INT, in INT) {
 
 =head1 COPYRIGHT
 
-Copyright (C) 2001-2011, Parrot Foundation.
+Copyright (C) 2001-2014, Parrot Foundation.
 
 =head1 LICENSE
 

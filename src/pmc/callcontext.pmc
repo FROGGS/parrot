@@ -645,6 +645,8 @@ Mark any referenced strings and PMCs.
             UINTVAL         i;
 
             GET_ATTR_bp_ps(INTERP, SELF, bp_ps);
+            if (!bp_ps.regs_p) /* in allocate_registers */
+                return;
 
             for (i = 0; i < regs_p; ++i) {
                 PMC * const p = bp_ps.regs_p[-1L-(i)];
@@ -848,9 +850,9 @@ CallContext.
                              : VTABLE_type(INTERP, c[i].u.p);
                         break;
                     default:
-                        Parrot_ex_throw_from_c_args(INTERP, NULL,
+                        Parrot_ex_throw_from_c_noargs(INTERP,
                             EXCEPTION_INVALID_OPERATION,
-                            "Multiple Dispatch: invalid argument type!");
+                            "Multiple Dispatch: invalid argument type");
                 }
 
                 VTABLE_set_integer_keyed_int(INTERP, type_tuple, i, type);
@@ -1065,8 +1067,10 @@ return current Namespace
         Pcc_cell *cells;
         INTVAL    num_pos, allocated_positionals;
 
+        PARROT_ASSERT(value
+                || !"Push empty object into CallContext");
         PARROT_ASSERT(!PObj_on_free_list_TEST(value)
-                || !"Push dead object into CallContext!");
+                || !"Push dead object into CallContext");
 
         GET_ATTR_num_positionals(INTERP, SELF, num_pos);
         GET_ATTR_allocated_positionals(INTERP, SELF, allocated_positionals);
@@ -1108,7 +1112,7 @@ return current Namespace
         INTVAL    i, type;
 
         if (size < 1)
-            Parrot_ex_throw_from_c_args(INTERP, NULL,
+            Parrot_ex_throw_from_c_noargs(INTERP,
                 EXCEPTION_INVALID_OPERATION,
                 "Cannot shift PMC from empty CallContext");
 
@@ -1131,7 +1135,7 @@ return current Namespace
         INTVAL    i;
 
         if (size < 1)
-            Parrot_ex_throw_from_c_args(INTERP, NULL,
+            Parrot_ex_throw_from_c_noargs(INTERP,
                 EXCEPTION_INVALID_OPERATION,
                 "Cannot shift PMC from empty CallContext");
 
@@ -1632,7 +1636,7 @@ sub, or for the point of the call a level deeper for the rest.
                                              ? cont->address
                                              : Parrot_pcc_get_pc(INTERP, cur_ctx);
 
-                    annotations = PackFile_Annotations_lookup(INTERP,
+                    annotations = Parrot_pf_annotations_lookup(INTERP,
                         seg->annotations, pc - seg->base.data,
                         NULL);
                 }

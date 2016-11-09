@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2005-2011, Parrot Foundation.
+Copyright (C) 2005-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -77,15 +77,13 @@ new_hll_entry(PARROT_INTERP, ARGIN(STRING *entry_name))
     ASSERT_ARGS(new_hll_entry)
     PMC * const hll_info = interp->HLL_info;
     const INTVAL id      = VTABLE_elements(interp, hll_info);
-
     PMC *entry_id;
 
     PMC * const entry = Parrot_pmc_new_init_int(interp,
             enum_class_FixedPMCArray, e_HLL_MAX);
 
-    if (entry_name && !STRING_IS_EMPTY(entry_name)) {
+    if (entry_name && !STRING_IS_EMPTY(entry_name))
         VTABLE_set_pmc_keyed_str(interp, hll_info, entry_name, entry);
-    }
     else
         VTABLE_push_pmc(interp, hll_info, entry);
 
@@ -93,7 +91,6 @@ new_hll_entry(PARROT_INTERP, ARGIN(STRING *entry_name))
     VTABLE_set_pmc_keyed_int(interp, entry, e_HLL_id, entry_id);
 
     VTABLE_push_pmc(interp, interp->HLL_entries, entry);
-
     return entry;
 }
 
@@ -286,7 +283,7 @@ Parrot_hll_register_HLL_type(PARROT_INTERP, INTVAL hll_id,
     ASSERT_ARGS(Parrot_hll_register_HLL_type)
 
     if (hll_id == Parrot_hll_get_HLL_id(interp, CONST_STRING(interp, "parrot")))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
             "Cannot map without an HLL");
     else {
         PMC * const hll_info = interp->HLL_info;
@@ -356,8 +353,8 @@ Parrot_hll_get_HLL_type(PARROT_INTERP, INTVAL hll_id, INTVAL core_type)
             return core_type;
 
         if (core_type >= PARROT_MAX_CLASSES || core_type < 0) {
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_OUT_OF_BOUNDS,
-                    "FixedIntegerArray: index out of bounds!");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
+                "index out of bounds");
         }
 
         type_array_attrs = PARROT_FIXEDINTEGERARRAY(type_array);

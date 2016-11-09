@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2011, Parrot Foundation.
+Copyright (C) 2001-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -167,9 +167,9 @@ Parrot_pf_verify_image_string(PARROT_INTERP, ARGIN(STRING *image))
 {
     ASSERT_ARGS(Parrot_pf_verify_image_string)
     if (STRING_length(image) < 16)
-        Parrot_ex_throw_from_c_args(interp, NULL,
+        Parrot_ex_throw_from_c_noargs(interp,
             EXCEPTION_INVALID_STRING_REPRESENTATION,
-            "Cannot deserialize PMC. Incorrect Length.");
+            "Cannot deserialize PMC: Incorrect Length");
     else {
         const char major = image->strstart[14];
         const char minor = image->strstart[15];

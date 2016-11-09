@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2007-2011, Parrot Foundation.
+Copyright (C) 2007-2015, Parrot Foundation.
 
 =head1 NAME
 
@@ -218,8 +218,8 @@ Parrot_cx_next_task(PARROT_INTERP, ARGIN(PMC *scheduler))
     interp->cur_task = task;
 
     if (!VTABLE_isa(interp, task, CONST_STRING(interp, "Task")))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Found a non-Task in the task queue.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Found a non-Task in the task queue");
 
     /* If we have no tasks in the queue, we can disable task preemption and
        save ourselves a few cycles. */
@@ -241,7 +241,7 @@ Does the scheduler need to wake up and do anything? If so, do that now.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
+PARROT_CAN_RETURN_NULL
 opcode_t*
 Parrot_cx_check_scheduler(PARROT_INTERP, ARGIN(opcode_t *next))
 {
@@ -271,8 +271,8 @@ needs to be pre-empted.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
 PARROT_EXPORT
+PARROT_CANNOT_RETURN_NULL
 opcode_t*
 Parrot_cx_run_scheduler(PARROT_INTERP, ARGIN(PMC *scheduler), ARGIN(opcode_t *next))
 {
@@ -348,8 +348,8 @@ Parrot_cx_stop_task(PARROT_INTERP, ARGIN(opcode_t *next))
     /* TODO: This check seems expensive. Do we need to have this active at all
        times, or can we make this conditional on NDEBUG? */
     if (PMC_IS_NULL(task) || !VTABLE_isa(interp, task, CONST_STRING(interp, "Task")))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Attempt to stop invalid interp->current_task.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Attempt to stop invalid interp->current_task");
 
     tdata->code = cont;
     PARROT_GC_WRITE_BARRIER(interp, task);
@@ -423,8 +423,8 @@ Parrot_cx_schedule_task(PARROT_INTERP, ARGIN(PMC *task_or_sub))
     int index;
 
     if (!interp->scheduler)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Scheduler was not initialized for this interpreter.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Scheduler was not initialized for this interpreter");
 
     /* TODO: Can we do anything less expensive than an ISA check here? */
     if (VTABLE_isa(interp, task_or_sub, CONST_STRING(interp, "Task")))
@@ -437,8 +437,8 @@ Parrot_cx_schedule_task(PARROT_INTERP, ARGIN(PMC *task_or_sub))
         PARROT_GC_WRITE_BARRIER(interp, task);
     }
     else
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Can only schedule Tasks and Subs.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Can only schedule Tasks and Subs");
 
 #ifdef PARROT_HAS_THREADS
     /* Search for a thread that is free. If we have a free thread, schedule
@@ -470,8 +470,8 @@ Parrot_cx_schedule_task(PARROT_INTERP, ARGIN(PMC *task_or_sub))
                 }
             }
         if (candidate == NULL)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Could not find a free thread.\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+                "Could not find a free thread");
 
         Parrot_thread_schedule_task(interp, candidate, task);
         Parrot_thread_notify_thread(candidate);
@@ -519,8 +519,8 @@ Parrot_cx_schedule_immediate(PARROT_INTERP, ARGIN(PMC *task_or_sub))
         PARROT_GC_WRITE_BARRIER(interp, task);
     }
     else
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Can only schedule Tasks and Subs.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Can only schedule Tasks and Subs");
 
     VTABLE_unshift_pmc(interp, interp->scheduler, task);
     SCHEDULER_wake_requested_SET(interp->scheduler);

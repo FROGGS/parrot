@@ -1,8 +1,8 @@
 {
-    "release.version"  : "6.9.0",
-    "release.name"     : "Rosy-faced Lovebird",
+    "release.version"  : "8.1.0",
+    "release.name"     : "Andean Parakeet",
     "release.day"      : "Tuesday",
-    "release.nextdate" : "18 Nov 2014",
+    "release.nextdate" : "15 Mar 2016",
     "release.type"     : "supported",
 
     "web.root"         : "http://parrot.org/",
@@ -12,10 +12,10 @@
     "web.org_root"     : "https://github.com/parrot",
 
     "bugday.day"       : "Saturday",
-    "bugday.date"      : "15 Nov 2014",
+    "bugday.date"      : "12 Mar 2016",
 
     "wiki.root"        : "https://github.com/parrot/parrot/wiki",
-    "wiki.bugday"      : "bug_day_2014_11_15",
+    "wiki.bugday"      : "bug_day_2016_03_12",
 
-    "ftp.path"         : "ftp://ftp.parrot.org/pub/parrot/releases/supported/6.9.0/"
+    "ftp.path"         : "ftp://ftp.parrot.org/pub/parrot/releases/supported/8.1.0/"
 }

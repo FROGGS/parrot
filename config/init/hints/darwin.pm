@@ -1,4 +1,4 @@
-# Copyright (C) 2005-2013, Parrot Foundation.
+# Copyright (C) 2005-2014, Parrot Foundation.
 
 package init::hints::darwin;
 
@@ -50,7 +50,7 @@ sub runstep {
         $flags->{ccflags} .= '-Wno-long-double ';
     }
 
-    $flags->{linkflags} .= " -undefined dynamic_lookup";
+    $flags->{linkflags} .= ""; # -undefined dynamic_lookup";
 
     _probe_for_libraries($conf, $flags, 'fink');
     _probe_for_libraries($conf, $flags, 'macports');
@@ -68,14 +68,14 @@ sub runstep {
         osvers              => $osvers,
         ccflags             => $flags->{ccflags},
         ldflags             => $flags->{ldflags},
-        ccwarn              => "-Wno-shadow",
+        #ccwarn              => "-Wno-shadow",
         libs                => $libs,
         share_ext           => '.dylib',
         load_ext            => '.bundle',
-        link                => 'c++',
+        link                => $flags->{link} || 'c++',
         linkflags           => $flags->{linkflags},
-        ld                  => 'c++',
-        ld_share_flags      => '-dynamiclib -undefined dynamic_lookup',
+        ld                  => $flags->{ld} || 'c++',
+        ld_share_flags      => '-dynamiclib',
         ld_load_flags       => '-undefined dynamic_lookup -bundle',
         memalign            => 'some_memalign',
         has_dynamic_linking => 1,
@@ -85,17 +85,26 @@ sub runstep {
         # of the library.
 
         parrot_is_shared       => $flags->{debugging} ? 0 : 1,
-        libparrot_shared       => "libparrot.$version$share_ext",
+
+        # GH #1213: use libparrotsrc$version locally and libparrot when installed
+        libparrot_shared       => "libparrotsrc.$version$share_ext",
         libparrot_shared_alias => "libparrot$share_ext",
+        inst_libparrot_shared  => "libparrot.$version$share_ext",
         rpath                  => "-L",
-        libparrot_soname       => "-install_name "
+        inst_libparrot_soname  => "-install_name "
             . '"'
             . $conf->data->get('libdir')
             . '/libparrot'
             . $conf->data->get('share_ext')
-            . '"'
-    );
+            . '"',
+        libparrot_soname       => "-install_name \"$lib_dir/libparrotsrc.$version$share_ext\""
+                            );
     $darwin_selections{dynext_dirs} = $flags->{dynext_dirs} if $flags->{dynext_dirs};
+    if ( $conf->options->get('disable-rpath') ) {
+        $darwin_selections{inst_libparrot_soname} = '';
+        $darwin_selections{libparrot_soname} = '';
+    }
+
     my $darwin_hints = "Darwin hints settings:\n";
     for my $k (sort keys %darwin_selections) {
         $darwin_hints .= sprintf("  %-24s => %s\n" => (
@@ -302,6 +311,9 @@ Should you not want to search for either of these packages, you may specify
 the command-line options C<darwin_no_fink> and/or C<darwin_no_macports>.
 
 The functionality is tested in F<t/steps/init/hints/darwin-01.t>.
+
+Note that debugging with F<gdb> requires static linking (F<parrot_old>) and
+no C<-undefined dynamic_lookup>
 
 =cut
 

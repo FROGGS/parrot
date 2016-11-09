@@ -1,3 +1,238 @@
+2016-??-??    release 8.3.0
+    - Core
+        + fix binding AF_UNIX sockets GH #1233 by Andrew Aldridge
+
+2016-03-15    release 8.2.0
+    - Core
+        + add foldcase string ops GH #786
+        + bump PBC_COMPAT to 13.1 for foldcase ops
+        + add missing StringHandle methods seek, peek, tell,
+          analog to FileHandle. Better seek error handling. GH #1011
+        + Deprecate StringHandle auto-reopen, auto-read, and
+          PIO_VF_AWAYS_READABLE. Will be removed with 8.3.0. GH #245
+        + Fix method dispatch with builtin namespaces. Subs are now ignored,
+          they need a :method attribute. It's now safer to define or override
+          class methods for builtin PMCs. GH #304
+    - Build
+        + Improve darwin install: make -j0 not needed anymore.
+          Use libparrotsrc.VER.dylib locally, libparrot installed.
+          GH #1213, #1212, #1096
+    - Documentation
+        + dynpmc file.copy does not allow dir arguments, GH #229
+    - Tests
+        + Check in pcre.t the returned error string, GH #258
+        + Test that file.copy to dir must fail, GH #229
+    - Community
+
+2016-02-16    release 8.1.0
+    - Core
+        + Annotate needed -Wcast-align fixes (for early armv5 systems)
+    - Documentation
+        + Fixed typo in move_buffer_callback doc
+        + Add missing hyperref package for latex
+    - Tests
+        + Restore make configure_tests, remove outdated t/steps/auto/labs-01.t
+
+2015-12-15    release 7.11.0
+    - Build
+        + Improve darwin and cygwin build, seperate installable libparrot.
+          GH #1212, 1096
+        + Honor --disable-rpath on darwin, skip -install_name then
+        + Update default cygwin compiler and linker to gcc with 1.7
+        + Add darwin and windows smokers (travis + appveyor), prev. linux only
+        + use a smaller default target: core (most parrot_utils, not all)
+          make all builds now all, including docs and installables
+
+2015-11-17    release 7.10.0
+    - Documentation
+        + Accept cperldoc as fallback to perldoc GH #1211
+
+2015-10-20    release 7.9.0
+    - Core
+        + StringBuilder.clone and ResizablePMCArray write barrier optimizations.
+          1.14% faster, GH #1123
+        + More StringBuilder optimizations with substr, set_pmc, push_pmc,
+          i_concatenate, and do less overallocation. <1% faster. GH #1123
+        + Support -D1 GC stats with --ccflags=-DMEMORY_DEBUG for --gc=ms
+        + Added a Parrot_{un,}block_GC_move API for the 2 string compacting
+          collectors ms and ms2
+        + Fixed a --gc=ms segv in Parrot_io_write_s GH #1196
+        + Fixed --gc=inf string header allocation and failing tests
+        + const/ARGIN all read-only IO api arguments
+        + Deprecated ListChunk GC API and src/list.c GH #1179
+    - Build
+        + --optimize: Replace -O2 from perl5 with -O3 on clang or gcc. GH #1185
+          5% faster
+        + Fixed make clean realclean and install which sometimes forgot pmc_default.h
+          GH #1194, GH #1206
+    - Tests
+        + Use the faster travis docker infrastructure without sudo
+
+2015-09-15    release 7.8.0
+    - Build
+        + Added fixes for AIX7.1 by tkob <ether4@gmail.com>
+        + Rewrote new_changelog_skeleton.pl to use JSON release data.
+
+2015-08-18    release 7.7.0
+    - Documentation
+        + remove bitrotted author contributions
+
+2015-07-21    release 7.6.0
+    - Core
+        + structview
+            = Added missing returns to switch/case.
+    - Build
+    - Documentation
+    - Tests
+        + distro/manifest_generated.t
+            = Corrected reversed order of got/expected.
+            = Added reference to GH#1206 .
+    - Community
+
+2015-06-16    release 7.5.0
+    - Core
+        + Optimize mod_i_* ops and Integer pmc to avoid util_intval_mod
+        + Coverity bugs fixed:
+            = missing_comma in optimizer.c
+            = nesting_indent_mismatch in runcore/subprof.c
+            = insecure chroot in platform/generic/file.c
+    - Tests
+        + Remove executable file permissions from some .t files
+    - Community
+         + Coverity static analysis scans of the Parrot source code
+           have resumed. Many thanks for providing the service to
+           the open-source community!
+
+2015-05-19    release 7.4.0
+     - Documentation
+         + Many minor corrections
+     - Community
+         + Coverity scans to resume RSN.
+
+2015-04-21    release 7.3.0 - supported
+    - Build
+        + Fixed windows link regression from 7.0.2 with cl.exe. #1203
+        + Fixed rlimit compilation for OpenBSD
+    - Tests
+        + Relaxed the common GC stress test and re-add the JSON.nqp variant.
+
+2015-03-17    release 7.2.0
+    - Build
+        + Fix warning on Win32 (with cl.exe)  when `link` is not explicitly set.
+
+2015-02-17    release 7.1.0
+    - Core
+        + Fix SIGBUS in GC trace_mem_block on alignment-strict CPUs (arm), #1200.
+          We traced all pointers by +1 and not by +4 or +8.
+    - Tests
+        + Add a common GC stress test to the normal testsuite. #1189
+        + Fix tests for --ccflags=-DSTRUCT_DEBUG. #1195
+    - Community
+        + rakudo perl6 announced to drop parrot support.
+
+2015-01-29    release 7.0.2 - supported
+    - Core
+        + Fix 2 regressions from 6.11.0 on win64 with Visual C++. GH #1190, #1192
+          Wrong SAL annotations, and a wrong function ptr cast.
+        + Fixed reading big-endian long doubles from .pbc on win64. GH #1193
+    - Build
+        + Optimize away ExtUtils::Command on posix systems. #1177
+        + Fix cpu config values for gcc_cmpxchg to include atomic/gcc_x86.o on amd64.
+          Harmonized the cpu config keys, no $platform_has_$feature keys anymore, just
+          HAS_$PLATFORM_$feature. #1173
+        + Improved msvc configuration from a mingw perl. #1191
+
+2015-01-23    release 7.0.1 - supported
+    - Core
+        + Fixed a serious GC regression with --optimize and the default GC gms. #1186
+        + Fixed a threads deadlock with the default GC gms. #1187
+    - Build
+        + Fixed and improved --m={32,64} cross-compilation support and
+          automatic libpath adjustments for gcc, esp. on mips64 and ppc64.
+          #1181, #1182, #1178, #1110
+        + Actually link with libicu when probing for it. #1182, #1188
+
+2015-01-20    release 7.0.0 - supported
+    - Core
+        + Added a experimental INTERPINFO_MAX_GENERATIONS api, made MAX_GENERATIONS
+          --ccflags adjustable, renamed to GC_MAX_GENERATIONS, and use the correct number.
+          Default 3 for generations 0,1,2.
+        + Add the DEPRECATED attribute to all deprecated functions. #1163
+        + Fix parser crashes detected by the american fuzzy lop (1.06b) #1168
+        + Replace an end op inside pcc methods by a returncc op, #1168.
+          This used to crash the last years, now it returns. It is now documented as
+          unspecified behavior.
+        + Finish PackFile_ API deprecation and refactoring. No wrong exports anymore.
+          See api.yml. #1170 #1122
+        + Reenabled the following NCI signatures: t (cstring), 2 (Integer PMC -> short),
+          3 (-> int), 4 (-> long). SDL and Curses is now usable again. #436, #601, #605
+        + Added a useful subset of static nci thunks to core-thunks. #1171
+          Updated the extra thunks to pass most nci examples without libffi, just
+          2, 3 and 4 require libffi when being used destructively on the Integer PMC.
+        + Fixed a couple of blocking ResizablePMCArray ("rpa") splice regressions from 6.10,
+          which broke perl6. See https://github.com/perl6/nqp/issues/209, GH #1174, #1175.
+        + Added an optional rpa splice warning as in perl5, when an overlarge offset is
+          adjusted. #1176
+        + Fix a GC regression from 6.11 with ResizablePMCArray #1159 (1.2% slower)
+        + Skip startup warnings "Unknown codeset `', defaulting to ASCII" when
+          nl_langinfo() failed, and silently use ASCII. #1180
+    - Build
+        + More code cleanup to reduce compiler warnings, code size and unneeded calls.
+        + Add ARGIN_FORMAT declarations, probe for gnu_printf, ms_printf, printf. #1163
+        + Fix PARROT_CANNOT_RETURN_NULL #1163
+        + Move HASATTRIBUTE_* definitions from ccflags via cmdline to has_header.h #1163
+        + Add the _Check_return_ MSVC SAL variant #1163
+        + Check and fix that PARROT_EXPORT being the first function attribute (C++) #1164
+        + Allow PARROT_DOES_NOT_RETURN without PARROT_CANNOT_RETURN_NULL #1163
+        + Move -Wformat to --cage #1165
+        + Fix and allow --cxx on FreeBSD 10 (clang, not g++) #1166
+        + Fix git_describe config probe on tag-less repos, e.g. git clone --depth #1167
+        + Fix solaris asctime_r with _POSIX_C_SOURCE #858
+    - Documentation
+    - Tests
+    - Community
+
+ 2014-12-16    release 6.11.0
+    - Core
+        + Rewrote ResizablePMCArray with moving offset, esp on shift.
+          Even better than nqp/qrpa. 20% faster overall. #1152
+        + Fixed wrong maybe_mark_and_sweep call in --gc ms #1142
+        + Added GC maybe_gc_mark vtable function #1142
+        + Fixed Memory_Block prolog access in --gc inf #1136
+        + Added MEMORY_DEBUG tracing to --gc inf and ms2, added
+          GC validation to ms2.
+        + Fix bignum.i_substract and i_multiply #1144
+        + Fix cmod_p_p_n* math dynops for NaN and Inf #1147
+        + Fix floor, ceil and complex, integer math ops for NaN and Inf #422
+        + Optimize printing of single numbers #828
+        + More --debugging protections when accessing empty registers
+          from :immediate #1024
+        + Change ResizablePMCArray.delete to throw out of bounds errors,
+          but just warn on deprecated delete[0] with size 0 for backcompat. #1153
+        + Add check for illegal delete of capture blocks in PGE.match #1154
+        + Add new traceflag -t20 for ResizablePMCArray states.
+        + Add experimental vms support by mvorl. Untested. GH #866
+        + Provide Parrot_new_string and Parrot_compile_string in the extend api
+    - Build
+        + Extend auto::infnan probe to other --floatval #1146
+        + Warn in Configure on experimental flags intval, floatval and gc #1148
+        + Die in Configure on unsupported intval sizes #1148, #642, ...
+        + Renamed auto::labs to auto::mathl, probe and use more long math
+          functions: fabsl powl ceill floorl fmodl expl logl #1111
+        + Fixed pbc_to_exe and wrong Parrot_{g,s,uns}etenv declarations on windows #1156
+    - Documentation
+        + Rewrote docs/pmc/array.pod
+    - Tests
+        + Fix t/steps/auto/arch-01.t darwin regression #1142
+        + Added bigger t/stress/gc.t test to catch most GC issues.
+        + Add optional copyright year test on TEST_SLOW #719
+        + Fix most --floatval='long double' tests, just embed API broken #1111
+        + Adjust tests for VALGRIND=valgrind #1150
+        + Added tests to t/pmc/resizablepmcarray.t to cover all offset cases. #1152
+        + Replace included IO::CaptureOutput with our own capture function. #892
+        + Fixed most embed and extend tests. #41511 #829
+    - Community
+
 2014-11-18    release 6.10.0
     - Core
         + Add imcc -d2 flag for MKCONST tracing.
@@ -12,6 +247,21 @@
           Print initial memory settings on -D1 and more with -D101 and -D200.
         + Added -t10 trace flag for pmc flags, prettier -t output, less GC stress.
         + Fixed GC bug in Coroutine.clone #1108, #1109
+        + Export Parrot_io_get_vtable. #1131
+        + Added lstat io op for nqp, fixed os.lstat method. #1129
+        + Throw errors on illegal seek arguments, no assertions. #1130
+        + Disallow negative count argument for array splice methods. GH #766
+        + Allow array negative index access for most arrays. #1127
+        + Shorten and harmonize array exception messages: no context, just:
+          index out of bounds, illegal argument, can't resize, ... #1126
+        + Add simplier Parrot_ex_throw_from_c_noargs. #1132
+        + Fix all wrong exception codes left-overs, 0, 1 or -1. #1133
+        + Unescape double-quoted .lex string constants. #1095, perl6 RT#116643
+        + Downgrade external ascii strings on multi-byte platform encodings
+          to ascii. #1098
+        + Fix self heuristic with vtable overridden method calls.
+          $P0($P0) instead of $P0() is now invalid, it is always a method.
+          https://trac.parrot.org/parrot/ticket/103 #1013
     - Build
         + Set -mabi=64 for gcc --m=64 on mips, -m64 on powerpc #1110
         + Add --{en,dis}able-static #1104
@@ -25,6 +275,8 @@
         + Skip -Werror=strict-prototypes only on broken icu 4.2 - 4.9. #867
     - Documentation
         + Document .lex "name" limitations. Use .lex 'name' w/ single-quotes #1095
+        + Fixed 6.9 manpage regressions on BSD make #1125
+        + Better newclass example code in pirbook #802
     - Tests
         + Fixed make smoke, uploading to smolder with changed YAML::Tiny
           quoting. #1078
@@ -70,6 +322,10 @@
           provide now --debugging[=flags] for debugging. [GH #1099]
         + Enable --disable-shared (or --parrot_is_shared=0) to link against static
           libparrot [GH #1101]
+        + Change darwin build flags to improve gdb debugging,
+          no -undefined dynamic_lookup. #1096
+        + Fix parrot-ops2c not generating extraneous parentheses #1008
+        + Adjust all warnings and suffix overrides
     - Documentation
         + Add missing manpages for pbc_disassemble, pbc_dump, pbc_merge
         + Improved src/string/encoding/tables.c pod.

@@ -262,7 +262,7 @@ IMCC_debug_ins(ARGMOD(imc_info_t *imcc), int level, ARGIN(const Instruction *ins
     if (!(level & imcc->debug))
         return;
     pstderr = Parrot_io_internal_std_os_handle(imcc->interp, PIO_STDERR_FILENO);
-    Parrot_io_pprintf(imcc->interp, pstderr, "0x%x %s ", ins, ins->opname);
+    Parrot_io_pprintf(imcc->interp, pstderr, "0x%lx %s ", PTR2ULONG(ins), ins->opname);
     ins_print(imcc, pstderr, ins);
     Parrot_io_pprintf(imcc->interp, pstderr, "\n");
 }
@@ -468,7 +468,7 @@ dump_symreg(ARGIN(const IMC_Unit *unit))
             continue;
         if (!r->first_ins)
             continue;
-        fprintf(stderr, "%s \t%d\t%d\t%d\t%d\t%c   %2d %2d\t%d\t%d\t%s\t%lx\n",
+        fprintf(stderr, "%s \t%d\t%d\t%d\t%d\t%c   %2d %2d\t%d\t%d\t%s\t"UINTVAL_FMT"\n",
                 r->name,
                 r->first_ins->index, r->last_ins->index,
                 r->first_ins->bbindex, r->last_ins->bbindex,

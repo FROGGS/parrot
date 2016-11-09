@@ -214,7 +214,8 @@ Parrot_api_set_runcore(Parrot_PMC interp_pmc, ARGIN(const char * corename),
               || STREQ(corename, "switch-jit"))
             Parrot_runcore_switch(interp, Parrot_str_new_constant(interp, "fast"));
         else
-            Parrot_ex_throw_from_c_args(interp, NULL, 1, "Invalid runcore type %s", corename);
+            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_KEY_NOT_FOUND,
+                    "Invalid runcore type %s", corename);
     }
     EMBED_API_CALLOUT(interp_pmc, interp)
 }
@@ -635,7 +636,7 @@ Parrot_api_reset_call_signature(Parrot_PMC interp_pmc, ARGMOD(Parrot_PMC ctx))
     EMBED_API_CALLIN(interp_pmc, interp)
     STRING * const callcontext = Parrot_str_new(interp, "CallContext", 0);
     if (!VTABLE_isa(interp, ctx, callcontext))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
             "Not a valid CallContext");
     VTABLE_morph(interp, ctx, PMCNULL);
     EMBED_API_CALLOUT(interp_pmc, interp)

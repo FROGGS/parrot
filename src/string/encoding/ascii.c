@@ -151,7 +151,7 @@ ascii_chr(PARROT_INTERP, UINTVAL codepoint)
     ASSERT_ARGS(ascii_chr)
     char real_codepoint = (char)codepoint;
     return Parrot_str_new_init(interp, &real_codepoint, 1,
-            Parrot_ascii_encoding_ptr, 0);
+             Parrot_ascii_encoding_ptr, 0);
 }
 
 
@@ -174,7 +174,7 @@ ascii_scan(PARROT_INTERP, ARGMOD(STRING *src))
 
     for (i = 0; i < src->bufused; ++i) {
         if (p[i] >= 0x80)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_STRING_REPRESENTATION,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_STRING_REPRESENTATION,
                 "Invalid character in ASCII string");
     }
 
@@ -212,7 +212,7 @@ ascii_partial_scan(PARROT_INTERP, ARGIN(const char *buf),
         c = (unsigned char)buf[i];
 
         if (c >= 0x80)
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_STRING_REPRESENTATION,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_STRING_REPRESENTATION,
                 "Invalid character in ASCII string");
 
         if (c == delim) {
@@ -432,6 +432,7 @@ static STR_VTABLE Parrot_ascii_encoding = {
     ascii_upcase,
     ascii_downcase,
     ascii_titlecase,
+    (str_vtable_foldcase_t)ascii_downcase,
     ascii_upcase_first,
     ascii_downcase_first,
     ascii_titlecase_first,

@@ -1,5 +1,5 @@
 #!./parrot
-# Copyright (C) 2010, Parrot Foundation.
+# Copyright (C) 2010-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -81,7 +81,7 @@ Tests the MappedByteArray PMC.
 
     $I0 = elements mm
     # The test file is one line of text, and line ending may have been
-    # converted, so the lenght can be one byte different.
+    # converted, so the length can be one byte different.
     $I1 = $I0 == 43
     $I2 = $I0 == 44
     $I0 = $I1 + $I2
@@ -156,14 +156,14 @@ CODE
     .end
 CODE
 
-    throws_substring(<<'CODE', 'index out of mapped', 'get_integer_keyed_int out of bounds')
+    throws_substring(<<'CODE', 'index out of bounds', 'get_integer_keyed_int out of bounds')
     .sub main
         $P0 = new ['MappedByteArray']
         $P0."open"("t/pmc/testfile")
         $I0 = $P0[-1]
     .end
 CODE
-    throws_substring(<<'CODE', 'index out of mapped', 'set_integer_keyed_int out of bounds')
+    throws_substring(<<'CODE', 'index out of bounds', 'set_integer_keyed_int out of bounds')
     .sub main
         $P0 = new ['MappedByteArray']
         $P0."open"("t/pmc/testfile", "rw")
@@ -171,7 +171,7 @@ CODE
     .end
 CODE
 
-    throws_substring(<<'CODE', 'get_string: index out of mapped', 'get_string out of bounds')
+    throws_substring(<<'CODE', 'index out of bounds', 'get_string out of bounds')
     .sub main
         $P0 = new ['MappedByteArray']
         $P0."open"("t/pmc/testfile", "rw")

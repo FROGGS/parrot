@@ -293,12 +293,10 @@ op new_call_context(out PMC) {
 inline op invokecc(invar PMC, invar PMC) :flow {
     PMC      * const p     = $1;
     opcode_t *dest         = expr NEXT();
-    PMC      * const signature = $2;
 
     Parrot_pcc_set_pc(interp, CURRENT_CONTEXT(interp), dest);
-
     Parrot_pcc_reuse_continuation(interp, CURRENT_CONTEXT(interp), dest);
-    dest                   = VTABLE_invoke(interp, p, dest);
+    dest = VTABLE_invoke(interp, p, dest);
 
     goto ADDRESS(dest);
 }
@@ -415,8 +413,8 @@ op wait(in PMC) {
     Parrot_Task_attributes *tdata;
 
     if (!VTABLE_isa(interp, task, Parrot_str_new_constant(interp, "Task")))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_OPERATION,
-            "Argument to wait op must be a Task.\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+            "Argument to wait op must be a Task");
 
     tdata = PARROT_TASK(task);
     LOCK(tdata->waiters_lock);

@@ -650,11 +650,11 @@ PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
 PMC *
 Parrot_ns_find_global_from_op(PARROT_INTERP, ARGIN(PMC *ns),
-        ARGIN_NULLOK(STRING *globalname), ARGIN_NULLOK(void *next))
+        ARGIN_NULLOK(STRING *globalname), SHIM(void *next))
 {
     ASSERT_ARGS(Parrot_ns_find_global_from_op)
     if (STRING_IS_NULL(globalname))
-        Parrot_ex_throw_from_c_args(interp, next, EXCEPTION_GLOBAL_NOT_FOUND,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_GLOBAL_NOT_FOUND,
             "Tried to get null global");
     else {
         PMC * const res = Parrot_ns_find_namespace_global(interp, ns, globalname);

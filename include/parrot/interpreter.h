@@ -52,6 +52,7 @@ typedef enum {
     PARROT_TRACE_SUB_CALL_FLAG      = 0x04,  /* invoke/retcc, not with --optimizing */
     PARROT_TRACE_CORO_STATE_FLAG    = 0x08,  /* not with --optimizing */
     PARROT_TRACE_OPS_PMC_FLAG       = 0x10,  /* verbose op: pmc flags */
+    PARROT_TRACE_ARRAY_STATE_FLAG   = 0x20,  /* array state, not with --optimizing */
     PARROT_ALL_TRACE_FLAGS          = 0xffff
 } Parrot_trace_flags;
 /* &end_gen */
@@ -252,9 +253,9 @@ struct parrot_interp_t {
     /* 9:   PMC *Executable              String PMC with name from argv[0]. */
 
 
-    PMC *HLL_info;                            /* HLL names and types */
-    PMC *HLL_namespace;                       /* cache of HLL toplevel ns */
-    PMC *HLL_entries;
+    PMC *HLL_info;                            /* OrderedHash of HLL names and types */
+    PMC *HLL_namespace;                       /* ResizablePMCArray cache of HLL toplevel ns */
+    PMC *HLL_entries;                         /* ResizablePMCArray */
 
     PMC *root_namespace;                      /* namespace hash */
     PMC *scheduler;                           /* concurrency scheduler */
@@ -363,6 +364,12 @@ typedef PMC *(*Parrot_compiler_func_t)(PARROT_INTERP,
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 
 PARROT_EXPORT
+PARROT_DEPRECATED
+PARROT_CANNOT_RETURN_NULL
+PMC * clone_interp(PARROT_INTERP, INTVAL flags)
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
 PARROT_CANNOT_RETURN_NULL
 PARROT_MALLOC
 Parrot_Interp Parrot_interp_allocate_interpreter(
@@ -379,6 +386,11 @@ void Parrot_interp_clear_flag(PARROT_INTERP, INTVAL flag)
 
 PARROT_EXPORT
 void Parrot_interp_clear_trace(PARROT_INTERP, UINTVAL flag)
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
+PARROT_CANNOT_RETURN_NULL
+PMC * Parrot_interp_clone(PARROT_INTERP, INTVAL flags)
         __attribute__nonnull__(1);
 
 PARROT_EXPORT
@@ -542,6 +554,8 @@ Interp* Parrot_interp_get_emergency_interpreter(void);
 void Parrot_interp_really_destroy(PARROT_INTERP, int exit_code, void *arg)
         __attribute__nonnull__(1);
 
+#define ASSERT_ARGS_clone_interp __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_interp_allocate_interpreter \
      __attribute__unused__ int _ASSERT_ARGS_CHECK = (0)
 #define ASSERT_ARGS_Parrot_interp_clear_debug __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
@@ -549,6 +563,8 @@ void Parrot_interp_really_destroy(PARROT_INTERP, int exit_code, void *arg)
 #define ASSERT_ARGS_Parrot_interp_clear_flag __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_interp_clear_trace __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
+#define ASSERT_ARGS_Parrot_interp_clone __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_interp_compile_file __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
@@ -685,10 +701,6 @@ void Parrot_run_callback(PARROT_INTERP,
     , PARROT_ASSERT_ARG(external_data))
 /* Don't modify between HEADERIZER BEGIN / HEADERIZER END.  Your changes will be lost. */
 /* HEADERIZER END: src/interp/inter_cb.c */
-
-/* parrotinterpreter.pmc */
-/* XXX Would be nice if this could live in some headerized grouping */
-PMC * clone_interpreter(Parrot_Interp self, INTVAL flags);
 
 #else /* !PARROT_IN_CORE */
 

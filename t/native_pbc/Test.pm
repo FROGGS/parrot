@@ -1,5 +1,5 @@
 #! perl
-# Copyright (C) 2001-2012, Parrot Foundation.
+# Copyright (C) 2001-2014, Parrot Foundation.
 
 package t::native_pbc::Test;
 use strict;
@@ -79,9 +79,14 @@ sub test_native_pbc {
         $skip_msg  = "$file has old PBC_COMPAT $pbc_bc_version. "
           . "Need $id platform to generate it.";
     }
-    if ($type eq 'number' and $cvt =~ /^8_16_[bl]e=>4_8_/) {
-        # 16 -> 8 drops some mantissa bits
-        $expected =~ s/1\.12589990684262e\+15/1.12589990684058e+15/;
+    if ($type eq 'number') {
+        if ($cvt =~ /^8_16_[bl]e=>4_8_/) {
+            # 16 -> 8 drops some mantissa bits
+            $expected =~ s/1\.12589990684262e\+15/1.12589990684058e+15/;
+        }
+        if ($^O eq 'MSWin32') { # windows likes to play games with the exponent
+            $expected =~ s/e\+15/e\+015/;
+        }
     }
     # check if skip or todo
   SKIP: {
@@ -108,13 +113,25 @@ sub test_native_pbc {
         else {
             $todo_msg = "$cvt yet untested. Please report success.";
         }
-        Parrot::Test::pbc_output_is( $file, $expected, "$cvt $desc",
-                       todo => "$todo_msg" );
+        # integer uses print, not say. so skip the following ==$pid==
+        if ($ENV{VALGRIND} and $expected == '270544960') {
+            Parrot::Test::pbc_output_like( $file, qr/^$expected/, "$cvt $desc",
+                                           todo => "$todo_msg" );
+        }
+        else {
+            Parrot::Test::pbc_output_is( $file, $expected, "$cvt $desc",
+                                         todo => "$todo_msg" );
+        }
     }
     else {
         skip $skip_msg, 1 if $bc ne $pbc_bc_version;
         local $TODO = $skip_msgv if $version ne $pbc_version;
-        Parrot::Test::pbc_output_is( $file, $expected, "$cvt $desc" );
+        if ($ENV{VALGRIND} and $expected == '270544960') {
+            Parrot::Test::pbc_output_like( $file, qr/^$expected/, "$cvt $desc");
+        }
+        else {
+            Parrot::Test::pbc_output_is( $file, $expected, "$cvt $desc" );
+        }
     }
   }
 }

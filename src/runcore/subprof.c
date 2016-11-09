@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2001-2012, Parrot Foundation.
+Copyright (C) 2001-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -455,7 +455,7 @@ createlines(PARROT_INTERP, ARGIN(subprofiledata *spdata), ARGIN(subprofile *sp))
             /* set srcfile and srcline */
             sp->srcline = anndata[ANN_ENTRY_VAL];
             /* + 1 needed because Annotations_lookup looks up the annotation _before_ the pc */
-            srcfilepmc = PackFile_Annotations_lookup(interp,
+            srcfilepmc = Parrot_pf_annotations_lookup(interp,
                                                      ann,
                                                      anndata[ANN_ENTRY_OFF] + 1,
                                                      Parrot_str_new_constant(interp, "file"));
@@ -531,10 +531,11 @@ sub2subprofile(PARROT_INTERP, ARGIN(subprofiledata *spdata), SHIM(PMC *ctx), ARG
 
     if (!spdata->sphash)
         spdata->sphash = Parrot_hash_new_pointer_hash(interp);
-        sp             = (subprofile *) Parrot_hash_get(interp,
-                                                        spdata->sphash,
-                                                        (void *) (subattrs->seg->base.data
-                                                                    + subattrs->start_offs));
+
+    sp = (subprofile *) Parrot_hash_get(interp,
+                                        spdata->sphash,
+                                        (void *) (subattrs->seg->base.data
+                                                    + subattrs->start_offs));
 
     if (!sp) {
         sp           = (subprofile *) mem_sys_allocate_zeroed(sizeof (subprofile));
@@ -825,6 +826,12 @@ dump_profile_data(PARROT_INTERP, ARGIN(subprofiledata *spdata))
     unsigned int totalops   = 0;
     UHUGEINTVAL  totalticks = 0;
 
+#ifdef HAS_LONGLONG
+#  define UHUGEINTVAL_FMT "%llu"
+#else
+#  define UHUGEINTVAL_FMT "%lu"
+#endif
+
     if (!spdata->profile_type)
         return;
 
@@ -846,7 +853,7 @@ dump_profile_data(PARROT_INTERP, ARGIN(subprofiledata *spdata))
         });
 
     fprintf(stderr, "events: ops ticks\n");
-    fprintf(stderr, "summary: %d %lld\n", totalops, totalticks);
+    fprintf(stderr, "summary: %d "UHUGEINTVAL_FMT"\n", totalops, totalticks);
 
     parrot_hash_iterate(spdata->sphash,
         subprofile *hsp = (subprofile*)_bucket->value;
@@ -896,10 +903,10 @@ dump_profile_data(PARROT_INTERP, ARGIN(subprofiledata *spdata))
 
                 if (li->ops || li->ticks)
                     fprintf(stderr,
-                            "%d %u %llu\n",
+                            "%d %u "UHUGEINTVAL_FMT"\n",
                             (int) srcline,
                             (unsigned int) li->ops,
-                            (unsigned long long) li->ticks);
+                            li->ticks);
 
                 for (ci = li->calls; ci && ci->callee; ci++) {
                     subprofile *csp = ci->callee;
@@ -909,10 +916,10 @@ dump_profile_data(PARROT_INTERP, ARGIN(subprofiledata *spdata))
                     fprintf(stderr, "\n");
                     fprintf(stderr, "calls=%u %d\n", (unsigned int) ci->count, (int) csp->srcline);
                     fprintf(stderr,
-                            "%d %u %llu\n",
+                            "%d %u "UHUGEINTVAL_FMT"\n",
                             (int) srcline,
                             (unsigned int) ci->ops,
-                            (unsigned long long) ci->ticks);
+                            ci->ticks);
                 }
             }
         });
@@ -937,14 +944,14 @@ dump_profile_data(PARROT_INTERP, ARGIN(subprofiledata *spdata))
             fprintf(stderr, "\n");
             fprintf(stderr, "calls=%u %d\n", (unsigned int) ci->count, (int) csp->srcline);
             fprintf(stderr,
-                    "%d %u %llu\n",
+                    "%d %u "UHUGEINTVAL_FMT"\n",
                     0,
                     (unsigned int) ci->ops,
-                    (unsigned long long) ci->ticks);
+                    ci->ticks);
         }
     }
 
-    fprintf(stderr, "\ntotals: %d %lld\n", totalops, totalticks);
+    fprintf(stderr, "\ntotals: %d "UHUGEINTVAL_FMT"\n", totalops, totalticks);
 }
 
 
@@ -1185,10 +1192,11 @@ get_subprofiledata(PARROT_INTERP, ARGIN(Parrot_runcore_t *runcore), int type)
     }
 
     if (spdata->profile_type != type)
-        Parrot_ex_throw_from_c_args(interp, NULL, 1, "illegal profile type change while profiling");
-
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+                "illegal profile type change while profiling");
     if (spdata->interp != interp)
-        Parrot_ex_throw_from_c_args(interp, NULL, 1, "illegal interpreter change while profiling");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_OPERATION,
+                "illegal interpreter change while profiling");
 
     return core->spdata;
 }
@@ -1253,7 +1261,7 @@ runops_subprof_sub_core(PARROT_INTERP, ARGIN(Parrot_runcore_t *runcore), ARGIN(o
 
     while (pc) {
         if (pc < code_start || pc >= code_end)
-            Parrot_ex_throw_from_c_args(interp, NULL, 1,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
                 "attempt to access code outside of current code segment");
 
         ctx    = CURRENT_CONTEXT(interp);
@@ -1351,7 +1359,7 @@ runops_subprof_hll_core(PARROT_INTERP, ARGIN(Parrot_runcore_t *runcore), ARGIN(o
         PMC *ctx;
         PMC *subpmc;
         if (pc < code_start || pc >= code_end)
-            Parrot_ex_throw_from_c_args(interp, NULL, 1,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
                 "attempt to access code outside of current code segment");
 
         ctx = CURRENT_CONTEXT(interp);
@@ -1487,7 +1495,7 @@ runops_subprof_ops_core(PARROT_INTERP, ARGIN(Parrot_runcore_t *runcore), ARGIN(o
         PMC *ctx;
         PMC *subpmc;
         if (pc < code_start || pc >= code_end)
-            Parrot_ex_throw_from_c_args(interp, NULL, 1,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
                 "attempt to access code outside of current code segment");
 
         ctx = CURRENT_CONTEXT(interp);

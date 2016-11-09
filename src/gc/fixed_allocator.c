@@ -331,8 +331,8 @@ Parrot_gc_pool_destroy(SHIM_INTERP, ARGMOD(Pool_Allocator *pool))
     mem_sys_free(pool);
 }
 
-PARROT_CANNOT_RETURN_NULL
 PARROT_EXPORT
+PARROT_CANNOT_RETURN_NULL
 void *
 Parrot_gc_pool_allocate(PARROT_INTERP, ARGMOD(Pool_Allocator * pool))
 {
@@ -483,7 +483,7 @@ pool_is_maybe_owned(ARGIN(const Pool_Allocator *pool), ARGIN(const void *ptr))
 {
     ASSERT_ARGS(pool_is_maybe_owned)
 
-    /* Poiners are aligned */
+    /* Pointers are aligned */
     if (PTR2UINTVAL(ptr) & 3)
         return 0;
 
@@ -538,7 +538,7 @@ allocate_new_pool_arena(PARROT_INTERP, ARGMOD(Pool_Allocator *pool))
     const size_t total_size = arena_size(pool);
 
     /* Run a GC if needed */
-    Parrot_gc_maybe_mark_and_sweep(interp, GC_trace_stack_FLAG);
+    interp->gc_sys->maybe_gc_mark(interp, GC_trace_stack_FLAG);
 
     new_arena = (Pool_Allocator_Arena *)mem_sys_allocate_zeroed(total_size);
 

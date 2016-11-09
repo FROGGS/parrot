@@ -198,12 +198,14 @@
   ticket:  'https://trac.parrot.org/parrot/ticket/852'
 -
   name:  'Overriding vtable invoke in PIR objects'
-  note:  'The VTABLE invoke in object.pmc puts SELF at the start of the signature call arguments when there is no current object and is not already here. This allows the usage of $P0() instead of $P0($P0).'
+  note:  'The VTABLE invoke in object.pmc always pushes SELF at the start of the method. It is always a method. Never use $P0($P0) instead of $P0(). This changed with 6.10.0'
   tags:
     - 'PMC'
     - 'experimental'
     - 'completed'
-  ticket:  'https://trac.parrot.org/parrot/ticket/103'
+  ticket:
+    - 'https://trac.parrot.org/parrot/ticket/103'
+    - 'https://github.com/parrot/parrot/issues/1013'
 -
   name:  'PARROT_LIBRARY and PARROT_INCLUDE environment variables'
   note:  'A way to provide an equivalent of -L and -I parrot command line options to language that doesn''t support it.'
@@ -672,3 +674,66 @@
     - deprecated
   ticket:  'https://github.com/parrot/parrot/issues/1101'
 -
+-
+  name:  'ResizablePMCArray.delete[0] on empty array'
+  note:
+    This NOP was previously silently ignored. Throw now a warning, and when deprecated,
+    throw an out of bounds exception.
+  tags:
+    - deprecated
+  ticket:  'https://github.com/parrot/parrot/issues/1153'
+-
+-
+  name:  'Deprecated non Parrot_ exported functions'
+  note:
+    All remaining exported functions with non C<Parrot_>, C<PDB_>, C<imcc_>, and C<mem_>
+    prefixes got now C<Parrot_> prefixes, and the old functions are deprecated.
+    Will be removed with Release 7.3.0.
+
+    * C<PackFile_> => C<Parrot_pf_>,
+    * C<clone_interpreter> => C<Parrot_interp_clone>,
+    * C<dynop_register> => C<Parrot_dynop_register>,
+    * C<new_runloop_jump_point> => C<Parrot_runloop_new_jump_point>,
+    * C<free_runloop_jump_point> => C<Parrot_runloop_free_jump_point>,
+    * C<parrot_split_path_ext> => C<Parrot_split_path_ext>,
+    * C<print_pbc_location> => C<Parrot_print_pbc_location>
+
+    Deprecated:
+      C<PackFile_funcs_register>, C<do_sub_pragmas>,
+      C<PackFile_Annotations_new>, C<PackFile_Annotations_destroy>, C<PackFile_Annotations_packed_size>,
+      C<PackFile_Annotations_pack>, C<PackFile_Annotations_unpack>, C<PackFile_Annotations_dump>
+      C<PackFile_ConstTable_unpack>,
+      C<PackFile_ConstTable_dump>, C<PackFile_ConstTable_dump_pmc>, C<PackFile_Constant_dump_str>
+
+  tags:
+    - api
+    - deprecated
+  ticket:  'https://github.com/parrot/parrot/issues/1122'
+-
+  name:  'Deprecated ListChunk GC API and src/list.c'
+  note:
+    Only imageiofreeze still uses it.
+    Set #define PARROT_BUFFERLIKE_LIST to use it
+    Will be removed with Release 8.3.0.
+
+    Deprecated:
+    * C<gc_sys->allocate_bufferlike_header>
+    * C<gc_sys->free_bufferlike_header>
+    and it's implementations in the gms, ms, ms2 and inf GC's.
+
+  tags:
+    - api
+    - deprecated
+  ticket:  'https://github.com/parrot/parrot/issues/1179'
+-
+  name :  'stricter StringHandle PMC, no auto-reopen, auto-read'
+  note:
+    StringHandle auto-read and auto-reopen semantics is deprecated. It behaves
+    now as the FileHandle PMC.
+    Reading from a handle open for writing fails, readall() for a closed handle fails.
+    Either use the "rw" mode or the new set_mode() method, and the new seek(0, 0) method.
+    Will fail with Release 8.3.0.
+  tags:
+    - api
+    - deprecated
+  ticket : 'https://github.com/parrot/parrot/issues/245'

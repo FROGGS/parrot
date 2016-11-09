@@ -18,6 +18,7 @@ and its utility functions.
 
 */
 
+#include <stdio.h>
 #include "parrot/parrot.h"
 #include "spf_private.h"
 #include "spf_render.str"
@@ -89,7 +90,6 @@ static STRING * handle_flags(PARROT_INTERP,
         __attribute__nonnull__(2)
         __attribute__nonnull__(3);
 
-PARROT_CANNOT_RETURN_NULL
 static void str_concat_w_flags(PARROT_INTERP,
     ARGOUT(PMC * sb),
     ARGIN(const SpfInfo *info),
@@ -230,7 +230,6 @@ Returns the pointer to the modified string.
 
 */
 
-PARROT_CANNOT_RETURN_NULL
 static void
 str_concat_w_flags(PARROT_INTERP, ARGOUT(PMC * sb), ARGIN(const SpfInfo *info),
         ARGMOD(STRING *src), ARGIN_NULLOK(STRING *prefix))
@@ -421,7 +420,7 @@ Parrot_sprintf_format(PARROT_INTERP, ARGIN(const STRING *pat), ARGMOD(SPRINTF_OB
     INTVAL i;
     INTVAL len     = 0;
     INTVAL old     = 0;
-    const INTVAL pat_len = (INTVAL)Parrot_str_length(interp, pat);
+    const INTVAL pat_len = Parrot_str_length(interp, pat);
     HUGEINTVAL num;
     HUGEINTVAL sharedint = 0;
     SpfInfo info = { 0, 0, 0, 0, (PHASE)0 }; /* Storage for flags, etc. */
@@ -860,11 +859,11 @@ Parrot_sprintf_format(PARROT_INTERP, ARGIN(const STRING *pat), ARGMOD(SPRINTF_OB
                             if (is_special && info.width != 0) {
                                 char tc1[16];
 #ifdef PARROT_HAS_SNPRINTF
-                                snprintf(tc1, 16, "%%%ds", info.width);
+                                snprintf(tc1, 16, "%%"UINTVAL_FMT"s", info.width);
                                 snprintf(tc, PARROT_SPRINTF_BUFFER_SIZE,
                                          tc1, tempstr);
 #else
-                                sprintf(tc1, "%%%ds", info.width);
+                                sprintf(tc1, "%%"UINTVAL_FMT"s", info.width);
                                 sprintf(tc, tc1, tempstr);
 #endif
                             }
@@ -947,7 +946,7 @@ Parrot_sprintf_format(PARROT_INTERP, ARGIN(const STRING *pat), ARGMOD(SPRINTF_OB
                  * loop, so we absolutely shouldn't be here. Throw an
                  * exception and hope this doesn't happen often.
                  */
-                Parrot_ex_throw_from_c_args(interp, NULL,
+                Parrot_ex_throw_from_c_noargs(interp,
                     EXCEPTION_INVALID_CHARACTER,
                     "Catastrophic sprintf error. Your input is very bad. "
                     "Please file a bug report.");

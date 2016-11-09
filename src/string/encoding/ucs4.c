@@ -188,15 +188,15 @@ ucs4_scan(PARROT_INTERP, ARGMOD(STRING *src))
     UINTVAL               i;
 
     if (src->bufused & 3)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-            "Unaligned end in UCS-4 string\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+            "Unaligned end in UCS-4 string");
 
     for (i = 0; i < len; ++i) {
         UINTVAL c = ptr[i];
 
         if (UNICODE_IS_INVALID(c))
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                    "Invalid character in UCS-4 string\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                    "Invalid character in UCS-4 string");
     }
 
     src->strlen = len;
@@ -233,8 +233,8 @@ ucs4_partial_scan(PARROT_INTERP, ARGIN(const char *buf),
         c = ptr[i];
 
         if (UNICODE_IS_INVALID(c))
-            Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                    "Invalid character in UCS-4 string\n");
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                    "Invalid character in UCS-4 string");
 
         if (c == delim) {
             len = i + 1;
@@ -367,8 +367,8 @@ ucs4_iter_set_and_advance(PARROT_INTERP,
     utf32_t * const ptr = (utf32_t *)str->strstart;
 
     if (UNICODE_IS_INVALID(c))
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_INVALID_CHARACTER,
-                "Invalid character in UCS-4 string\n");
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_INVALID_CHARACTER,
+                "Invalid character in UCS-4 string");
 
     ptr[i->charpos] = c;
 
@@ -440,6 +440,7 @@ static STR_VTABLE Parrot_ucs4_encoding = {
     unicode_upcase,
     unicode_downcase,
     unicode_titlecase,
+    unicode_foldcase,
     unicode_upcase_first,
     unicode_downcase_first,
     unicode_titlecase_first,

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2009-2011, Parrot Foundation.
+Copyright (C) 2009-2014, Parrot Foundation.
 
 =head1 NAME
 
@@ -376,7 +376,7 @@ ARGIN(opcode_t *pc))
         PMC            *preop_ctx_pmc;
 
         if (pc < code_start || pc >= code_end)
-            Parrot_ex_throw_from_c_args(interp, NULL, 1,
+            Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_OUT_OF_BOUNDS,
                     "attempt to access code outside of current code segment");
 
         preop_ctx_pmc         = CURRENT_CONTEXT(interp);
@@ -521,7 +521,7 @@ ARGIN(PPROF_DATA *pprof_data), ARGIN(opcode_t *pc))
 
     ASSERT_ARGS(record_annotations)
 
-    PMC * const annot = PackFile_Annotations_lookup(interp,
+    PMC * const annot = Parrot_pf_annotations_lookup(interp,
             interp->code->annotations, pc - code_start + 1, NULL);
 
     if (!PMC_IS_NULL(annot)) {
@@ -832,8 +832,8 @@ record_values_ascii_pprof(SHIM_INTERP, ARGIN(Parrot_profiling_runcore_t * runcor
 
         case PPROF_LINE_OP:
             {
-                const PPROF_DATA line     = (PPROF_DATA) pprof_data[PPROF_DATA_LINE];
-                const PPROF_DATA time     = (PPROF_DATA) pprof_data[PPROF_DATA_TIME];
+                const PPROF_DATA line     = pprof_data[PPROF_DATA_LINE];
+                const PPROF_DATA time     = pprof_data[PPROF_DATA_TIME];
                 const char * const opname = (const char *) pprof_data[PPROF_DATA_OPNAME];
                 fprintf(runcore->profile_fd, "OP:{x{line:%d}x}{x{time:%d}x}{x{op:%s}x}\n",
                         (int) line, (int) time, opname);

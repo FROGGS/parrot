@@ -1,5 +1,5 @@
 /* io.h
- *  Copyright (C) 2001-2011, Parrot Foundation.
+ *  Copyright (C) 2001-2015, Parrot Foundation.
  *  Overview:
  *      Parrot IO subsystem
  *  References:
@@ -132,28 +132,35 @@ http://msdn.microsoft.com/en-us/library/windows/desktop/aa366551(v=vs.85).aspx
 */
 
 typedef INTVAL      (*io_vtable_read_b)       (PARROT_INTERP, PMC *handle,
-                                                ARGOUT(char * buffer), size_t byte_length);
+                                               ARGOUT(char * buffer),
+                                               const size_t byte_length);
 typedef INTVAL      (*io_vtable_write_b)      (PARROT_INTERP, PMC *handle,
-                                                ARGIN(char * buffer), size_t byte_length);
+                                               ARGIN(const char * buffer),
+                                               const size_t byte_length);
 typedef INTVAL      (*io_vtable_flush)        (PARROT_INTERP, PMC *handle);
-typedef INTVAL      (*io_vtable_is_eof)       (PARROT_INTERP, PMC *handle);
-typedef void        (*io_vtable_set_eof)      (PARROT_INTERP, PMC *handle, INTVAL is_set);
-typedef PIOOFF_T    (*io_vtable_tell)         (PARROT_INTERP, PMC *handle);
+typedef INTVAL      (*io_vtable_is_eof)       (PARROT_INTERP, const PMC *handle);
+typedef void        (*io_vtable_set_eof)      (PARROT_INTERP, PMC *handle,
+                                               INTVAL is_set);
+typedef PIOOFF_T    (*io_vtable_tell)         (PARROT_INTERP, const PMC *handle);
 typedef PIOOFF_T    (*io_vtable_seek)         (PARROT_INTERP, PMC *handle,
-                                                PIOOFF_T offset, INTVAL whence);
-typedef void        (*io_vtable_adv_position) (PARROT_INTERP, PMC *handle, size_t len);
-typedef void        (*io_vtable_set_position) (PARROT_INTERP, PMC *handle, PIOOFF_T pos);
-typedef PIOOFF_T    (*io_vtable_get_position) (PARROT_INTERP, PMC *handle);
+                                                const PIOOFF_T offset, const INTVAL whence);
+typedef void        (*io_vtable_adv_position) (PARROT_INTERP, PMC *handle,
+                                               const size_t len);
+typedef void        (*io_vtable_set_position) (PARROT_INTERP, PMC *handle,
+                                               const PIOOFF_T pos);
+typedef PIOOFF_T    (*io_vtable_get_position) (PARROT_INTERP, const PMC *handle);
 typedef INTVAL      (*io_vtable_open)         (PARROT_INTERP, PMC *handle,
-                                                ARGIN(STRING *path), INTVAL flags,
-                                                ARGIN(STRING *mode));
-typedef INTVAL      (*io_vtable_is_open)      (PARROT_INTERP, PMC *handle);
+                                                ARGIN(const STRING *path),
+                                                const INTVAL flags,
+                                                ARGIN(const STRING *mode));
+typedef INTVAL      (*io_vtable_is_open)      (PARROT_INTERP, const PMC *handle);
 typedef INTVAL      (*io_vtable_close)        (PARROT_INTERP, PMC *handle);
-typedef void        (*io_vtable_set_flags)    (PARROT_INTERP, PMC *handle, INTVAL flags);
-typedef INTVAL      (*io_vtable_get_flags)    (PARROT_INTERP, PMC *handle);
-typedef size_t      (*io_vtable_total_size)   (PARROT_INTERP, PMC *handle);
-typedef PIOHANDLE   (*io_vtable_get_piohandle)(PARROT_INTERP, PMC *handle);
-typedef const STR_VTABLE *(*io_vtable_get_encoding) (PARROT_INTERP, PMC *handle);
+typedef void        (*io_vtable_set_flags)    (PARROT_INTERP, PMC *handle,
+                                               const INTVAL flags);
+typedef INTVAL      (*io_vtable_get_flags)    (PARROT_INTERP, const PMC *handle);
+typedef size_t      (*io_vtable_total_size)   (PARROT_INTERP, const PMC *handle);
+typedef PIOHANDLE   (*io_vtable_get_piohandle)(PARROT_INTERP, const PMC *handle);
+typedef const STR_VTABLE *(*io_vtable_get_encoding) (PARROT_INTERP, const PMC *handle);
 
 typedef struct _io_vtable {
     const char            * name;           /* Name of this vtable type */
@@ -216,6 +223,7 @@ INTVAL Parrot_io_close(PARROT_INTERP, ARGMOD(PMC *handle), INTVAL autoflush)
         FUNC_MODIFIES(*handle);
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 INTVAL Parrot_io_close_handle(PARROT_INTERP, ARGMOD(PMC *pmc))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
@@ -223,10 +231,9 @@ INTVAL Parrot_io_close_handle(PARROT_INTERP, ARGMOD(PMC *pmc))
 
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
-INTVAL Parrot_io_eof(PARROT_INTERP, ARGMOD(PMC *handle))
+INTVAL Parrot_io_eof(PARROT_INTERP, ARGIN(const PMC * const handle))
         __attribute__nonnull__(1)
-        __attribute__nonnull__(2)
-        FUNC_MODIFIES(*handle);
+        __attribute__nonnull__(2);
 
 PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
@@ -270,6 +277,7 @@ size_t Parrot_io_flush(PARROT_INTERP, ARGMOD(PMC *handle))
         FUNC_MODIFIES(*handle);
 
 PARROT_EXPORT
+PARROT_DEPRECATED
 void Parrot_io_flush_handle(PARROT_INTERP, ARGMOD(PMC *pmc))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
@@ -279,16 +287,25 @@ PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL /*@alt void@*/
 Parrot_io_fprintf(PARROT_INTERP,
-    ARGMOD(PMC *pmc),
-    ARGIN(const char *s),
+    ARGIN(const PMC * const pmc),
+    ARGIN_FORMAT(const char *s),
     ...)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
-        __attribute__nonnull__(3)
-        FUNC_MODIFIES(*pmc);
+        __attribute__format__(3, 4)
+        __attribute__nonnull__(3);
 
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
+PARROT_CAN_RETURN_NULL
+const IO_VTABLE * Parrot_io_get_vtable(PARROT_INTERP,
+    INTVAL idx,
+    ARGIN_NULLOK(const char * name))
+        __attribute__nonnull__(1);
+
+PARROT_EXPORT
+PARROT_WARN_UNUSED_RESULT
+PARROT_DEPRECATED
 PIOHANDLE Parrot_io_getfd(PARROT_INTERP, ARGIN(PMC *pmc))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2);
@@ -345,6 +362,7 @@ PMC * Parrot_io_open(PARROT_INTERP,
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 PMC * Parrot_io_open_handle(PARROT_INTERP,
     ARGIN(PMC *pmc),
     ARGIN(STRING *path),
@@ -376,35 +394,40 @@ PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL /*@alt void@*/
 Parrot_io_pprintf(PARROT_INTERP,
-    PIOHANDLE os_handle,
-    ARGIN(const char *s),
+    const PIOHANDLE os_handle,
+    ARGIN_FORMAT(const char *s),
     ...)
         __attribute__nonnull__(1)
+        __attribute__format__(3, 4)
         __attribute__nonnull__(3);
 
 PARROT_EXPORT
 PARROT_IGNORABLE_RESULT
 INTVAL /*@alt void@*/
 Parrot_io_printf(PARROT_INTERP,
-    ARGIN(const char *s),
+    ARGIN_FORMAT(const char *s),
     ...)
         __attribute__nonnull__(1)
+        __attribute__format__(2, 3)
         __attribute__nonnull__(2);
 
 PARROT_EXPORT
-INTVAL Parrot_io_putps(PARROT_INTERP, ARGMOD(PMC *pmc), ARGMOD(STRING *s))
+PARROT_DEPRECATED
+INTVAL Parrot_io_putps(PARROT_INTERP,
+    ARGIN(const PMC * const pmc),
+    ARGIN(const STRING * const s))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
-        __attribute__nonnull__(3)
-        FUNC_MODIFIES(*pmc)
-        FUNC_MODIFIES(*s);
+        __attribute__nonnull__(3);
 
 PARROT_EXPORT
-INTVAL Parrot_io_puts(PARROT_INTERP, ARGMOD(PMC *pmc), ARGIN(const char *s))
+PARROT_DEPRECATED
+INTVAL Parrot_io_puts(PARROT_INTERP,
+    ARGIN(const PMC * const pmc),
+    ARGIN(const char *s))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
-        __attribute__nonnull__(3)
-        FUNC_MODIFIES(*pmc);
+        __attribute__nonnull__(3);
 
 PARROT_EXPORT
 PARROT_CANNOT_RETURN_NULL
@@ -436,6 +459,7 @@ STRING * Parrot_io_readall_s(PARROT_INTERP, ARGMOD(PMC *handle))
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING * Parrot_io_readline(PARROT_INTERP, ARGMOD(PMC *handle))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
@@ -455,6 +479,7 @@ STRING * Parrot_io_readline_s(PARROT_INTERP,
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING * Parrot_io_reads(PARROT_INTERP, ARGMOD(PMC *pmc), size_t length)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
@@ -462,6 +487,7 @@ STRING * Parrot_io_reads(PARROT_INTERP, ARGMOD(PMC *pmc), size_t length)
 
 PARROT_EXPORT
 PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 STRING * Parrot_io_recv_handle(PARROT_INTERP, ARGMOD(PMC *pmc), size_t len)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
@@ -528,7 +554,7 @@ void Parrot_io_socket_connect(PARROT_INTERP,
 
 PARROT_EXPORT
 PARROT_WARN_UNUSED_RESULT
-PARROT_CANNOT_RETURN_NULL
+PARROT_DEPRECATED
 INTVAL Parrot_io_socket_handle(PARROT_INTERP,
     ARGMOD_NULLOK(PMC *socket),
     INTVAL fam,
@@ -597,7 +623,6 @@ PIOOFF_T Parrot_io_tell_handle(PARROT_INTERP, ARGMOD(PMC *handle))
         FUNC_MODIFIES(*handle);
 
 PARROT_EXPORT
-PARROT_WARN_UNUSED_RESULT
 size_t Parrot_io_write_b(PARROT_INTERP,
     ARGMOD(PMC *handle),
     ARGIN(const void *buffer),
@@ -610,7 +635,7 @@ size_t Parrot_io_write_b(PARROT_INTERP,
 PARROT_EXPORT
 INTVAL Parrot_io_write_s(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    ARGIN(STRING *s))
+    ARGIN(const STRING * const s))
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         __attribute__nonnull__(3)
@@ -655,13 +680,6 @@ PIOHANDLE Parrot_io_get_os_handle(PARROT_INTERP, ARGIN(PMC *handle))
 
 PARROT_WARN_UNUSED_RESULT
 PIOHANDLE Parrot_io_get_standard_piohandle(PARROT_INTERP, INTVAL idx)
-        __attribute__nonnull__(1);
-
-PARROT_WARN_UNUSED_RESULT
-PARROT_CAN_RETURN_NULL
-const IO_VTABLE * Parrot_io_get_vtable(PARROT_INTERP,
-    INTVAL idx,
-    ARGIN_NULLOK(const char * name))
         __attribute__nonnull__(1);
 
 PARROT_WARN_UNUSED_RESULT
@@ -734,6 +752,8 @@ INTVAL Parrot_io_write_byte_buffer_pmc(PARROT_INTERP,
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(pmc) \
     , PARROT_ASSERT_ARG(s))
+#define ASSERT_ARGS_Parrot_io_get_vtable __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
+       PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_io_getfd __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(pmc))
@@ -876,8 +896,6 @@ INTVAL Parrot_io_write_byte_buffer_pmc(PARROT_INTERP,
 #define ASSERT_ARGS_Parrot_io_get_standard_piohandle \
      __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp))
-#define ASSERT_ARGS_Parrot_io_get_vtable __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
-       PARROT_ASSERT_ARG(interp))
 #define ASSERT_ARGS_Parrot_io_make_offset_pmc __attribute__unused__ int _ASSERT_ARGS_CHECK = (\
        PARROT_ASSERT_ARG(interp) \
     , PARROT_ASSERT_ARG(pmc))
@@ -949,9 +967,9 @@ size_t io_buffer_find_string_marker(PARROT_INTERP,
 
 void Parrot_io_buffer_add_to_handle(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    INTVAL idx,
-    size_t length,
-    INTVAL flags)
+    const INTVAL idx,
+    const size_t length,
+    const INTVAL flags)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*handle);
@@ -1033,7 +1051,7 @@ size_t Parrot_io_buffer_read_b(PARROT_INTERP,
 
 void Parrot_io_buffer_remove_from_handle(PARROT_INTERP,
     ARGMOD(PMC *handle),
-    INTVAL idx)
+    const INTVAL idx)
         __attribute__nonnull__(1)
         __attribute__nonnull__(2)
         FUNC_MODIFIES(*handle);
@@ -1071,8 +1089,8 @@ size_t Parrot_io_buffer_write_b(PARROT_INTERP,
     ARGMOD_NULLOK(IO_BUFFER *buffer),
     ARGMOD(PMC * handle),
     ARGIN(const IO_VTABLE *vtable),
-    ARGIN(char *s),
-    size_t length)
+    ARGIN(const char *s),
+    const size_t length)
         __attribute__nonnull__(1)
         __attribute__nonnull__(3)
         __attribute__nonnull__(4)

@@ -1,9 +1,9 @@
 /*
-Copyright (C) 2001-2011, Parrot Foundation.
+Copyright (C) 2001-2015, Parrot Foundation.
 
 =head1 NAME
 
-src/gc/api.c - general Parrot API for GC functions
+src/gc/api.c - general Parrot API for all GC functions
 
 =head1 DESCRIPTION
 
@@ -15,6 +15,8 @@ of the GC. This is documented in PDD 9 with supplementary notes in
 F<docs/memory_internals.pod>.
 
 =head1 GC OVERVIEW
+
+GC subsystems can be selected at run-time.
 
 The GC is broken into a number of different files that each represent different
 components.
@@ -50,13 +52,17 @@ A separate compacting garbage collector is used to keep track of them.
 
 These files are the individual GC cores which implement the primary tracing
 and sweeping logic.
-gc_ms.c is the mark & sweep collector core,
-gc_ms2.c implements a generational mark & sweep allocator,
+
+gc_ms.c  implements the default mark & sweep collector core,
+
+gc_ms2.c implements a non-recursive mark & sweep allocator,
+
 gc_gms.c implements a generational, non-compacting, mark and sweep allocator,
+
 gc_inf.c implements an "infinite" allocator which never frees any memory.
+
 The infinite allocator is not recommended except for debugging.
-The default is currently gc_ms2.c but is expected to move to gc_gms.c
-after RELEASE_3_3_0.
+The default is currently F<gc_gms.c>, it was F<gc_ms2.c> until RELEASE_3_3_0.
 
 =item F<src/gc/mark_sweep.c>
 
@@ -225,15 +231,14 @@ Parrot_gc_initialize(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
         Parrot_gc_gms_init(interp, args);
         break;
       default:
-        /* add a default to supress compiler warnings
-         * should never get here as the above if statemewnt
-         * would catch any invalid GC types and exit
-         */
+        fprintf(stderr, "Unknown GC sys_type %d\n", interp->gc_sys->sys_type);
+        PANIC(interp, "Cannot activate GC");
         break;
     }
 
     /* Assertions that GC subsystem has complete API */
     PARROT_ASSERT(interp->gc_sys->do_gc_mark);
+    PARROT_ASSERT(interp->gc_sys->maybe_gc_mark);
     PARROT_ASSERT(interp->gc_sys->compact_string_pool);
 
     /* It should be mandatory. But there is abstraction leak in */
@@ -246,8 +251,10 @@ Parrot_gc_initialize(PARROT_INTERP, ARGIN(Parrot_GC_Init_Args *args))
     PARROT_ASSERT(interp->gc_sys->allocate_string_header);
     PARROT_ASSERT(interp->gc_sys->free_string_header);
 
+#ifdef PARROT_BUFFERLIKE_LIST
     PARROT_ASSERT(interp->gc_sys->allocate_bufferlike_header);
     PARROT_ASSERT(interp->gc_sys->free_bufferlike_header);
+#endif
 
     PARROT_ASSERT(interp->gc_sys->allocate_pmc_attributes);
     PARROT_ASSERT(interp->gc_sys->free_pmc_attributes);
@@ -316,7 +323,7 @@ Parrot_gc_new_pmc_header(PARROT_INTERP, UINTVAL flags)
     PMC * const pmc = interp->gc_sys->allocate_pmc_header(interp, flags);
 
     if (!pmc)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_ALLOCATION_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ALLOCATION_ERROR,
             "Parrot VM: PMC allocation failed!\n");
 
     PObj_get_FLAGS(pmc) = PObj_is_PMC_FLAG|flags;
@@ -371,7 +378,7 @@ Parrot_gc_new_string_header(PARROT_INTERP, UINTVAL flags)
 
     STRING * const string = interp->gc_sys->allocate_string_header(interp, flags);
     if (!string)
-        Parrot_ex_throw_from_c_args(interp, NULL, EXCEPTION_ALLOCATION_ERROR,
+        Parrot_ex_throw_from_c_noargs(interp, EXCEPTION_ALLOCATION_ERROR,
             "Parrot VM: STRING allocation failed!\n");
 
     string->strstart        = NULL;
@@ -399,6 +406,8 @@ Parrot_gc_free_string_header(PARROT_INTERP, ARGMOD(STRING *s))
     interp->gc_sys->free_string_header(interp, s);
 }
 
+#ifdef PARROT_BUFFERLIKE_LIST
+
 /*
 
 =item C<Parrot_Buffer * Parrot_gc_new_bufferlike_header(PARROT_INTERP, size_t
@@ -407,7 +416,7 @@ size)>
 Returns a new buffer-like header from the appropriate sized pool.
 A "bufferlike object" is an object that is considered to be isomorphic to the
 PObj, so it will participate in normal GC. At the moment these are only used
-to create ListChunk objects in src/list.c.
+to create ListChunk objects in src/list.c, which is unused.
 
 =cut
 
@@ -443,6 +452,7 @@ Parrot_gc_free_bufferlike_header(PARROT_INTERP, ARGMOD(Parrot_Buffer *obj),
     ASSERT_ARGS(Parrot_gc_free_bufferlike_header)
     interp->gc_sys->free_bufferlike_header(interp, obj, size);
 }
+#endif
 
 /*
 
@@ -657,7 +667,6 @@ Parrot_gc_reallocate_memory_chunk(PARROT_INTERP, ARGFREE(void *data), size_t new
 }
 
 PARROT_EXPORT
-PARROT_CANNOT_RETURN_NULL
 void
 Parrot_gc_free_memory_chunk(PARROT_INTERP, ARGIN_NULLOK(void *data))
 {
@@ -821,6 +830,24 @@ Parrot_gc_total_pmcs(PARROT_INTERP)
 
 /*
 
+=item C<int Parrot_gc_max_generations(PARROT_INTERP)>
+
+Returns the number of generations being allocated.
+
+=cut
+
+*/
+
+PARROT_EXPORT
+int
+Parrot_gc_max_generations(PARROT_INTERP)
+{
+    ASSERT_ARGS(Parrot_gc_max_generations)
+    return interp->gc_sys->get_gc_info(interp, MAX_GENERATIONS);
+}
+
+/*
+
 =item C<size_t Parrot_gc_count_mark_runs(PARROT_INTERP)>
 
 Return the number of mark runs the GC has performed.
@@ -961,6 +988,14 @@ Blocks the GC from performing its sweep phase.
 
 Unblocks GC sweep.
 
+=item C<void Parrot_block_GC_move(PARROT_INTERP)>
+
+Blocks the GC from performing its compact/move phase.
+
+=item C<void Parrot_unblock_GC_move(PARROT_INTERP)>
+
+Unblocks the GC compact/move phase.
+
 =item C<unsigned int Parrot_is_blocked_GC_mark(PARROT_INTERP)>
 
 Determines if the GC mark is currently blocked.
@@ -969,10 +1004,14 @@ Determines if the GC mark is currently blocked.
 
 Determines if the GC sweep is currently blocked.
 
+=item C<unsigned int Parrot_is_blocked_GC_move(PARROT_INTERP)>
+
+Determines if the GC string compacting phase is currently blocked.
+
 =item C<void Parrot_gc_completely_unblock(PARROT_INTERP)>
 
-Completely unblock the GC mark and sweep. This is only used at interpreter
-destruction, using it anywhere else will cause problems.
+Completely unblock the GC mark, sweep and move. This is only used at
+interpreter destruction, using it anywhere else will cause problems.
 
 =cut
 
@@ -1034,6 +1073,25 @@ Parrot_unblock_GC_sweep(PARROT_INTERP)
 }
 
 PARROT_EXPORT
+void
+Parrot_block_GC_move(PARROT_INTERP)
+{
+    ASSERT_ARGS(Parrot_block_GC_move)
+    if (interp->gc_sys->block_move)
+        interp->gc_sys->block_move(interp);
+
+}
+
+PARROT_EXPORT
+void
+Parrot_unblock_GC_move(PARROT_INTERP)
+{
+    ASSERT_ARGS(Parrot_unblock_GC_move)
+    if (interp->gc_sys->unblock_move)
+        interp->gc_sys->unblock_move(interp);
+}
+
+PARROT_EXPORT
 unsigned int
 Parrot_is_blocked_GC_mark(PARROT_INTERP)
 {
@@ -1055,6 +1113,18 @@ Parrot_is_blocked_GC_sweep(PARROT_INTERP)
         return 0;
 }
 
+
+PARROT_EXPORT
+unsigned int
+Parrot_is_blocked_GC_move(PARROT_INTERP)
+{
+    ASSERT_ARGS(Parrot_is_blocked_GC_move)
+    if (interp->gc_sys->is_blocked_move)
+        return interp->gc_sys->is_blocked_move(interp);
+    else
+        return 0;
+}
+
 PARROT_EXPORT
 void
 Parrot_gc_completely_unblock(PARROT_INTERP)
@@ -1064,6 +1134,8 @@ Parrot_gc_completely_unblock(PARROT_INTERP)
            Parrot_unblock_GC_mark(interp);
     while (Parrot_is_blocked_GC_sweep(interp))
            Parrot_unblock_GC_sweep(interp);
+    while (Parrot_is_blocked_GC_move(interp))
+           Parrot_unblock_GC_move(interp);
 }
 
 /*
